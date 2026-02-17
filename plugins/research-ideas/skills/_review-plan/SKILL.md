@@ -35,16 +35,20 @@ Add to your `.env` file or shell profile.
 ## Usage
 
 ```
-/review-plan                              # auto-detect plan
-/review-plan gpt-4-turbo                  # specify model
+/review-plan                              # auto-detect plan, use Azure/gpt-4o
+/review-plan GCP/gemini-2.5-flash         # use Gemini
+/review-plan aws/claude-opus-4-6          # use Claude
 /review-plan ~/.claude/plans/my-plan.md   # explicit path
 /review-plan --dry-run                    # verify config
 ```
 
 ## Arguments
 
-- **Plan path**: Contains `/` or ends with `.md` → treated as plan file
-- **Model**: Default `gpt-4o`. Examples: `gpt-4-turbo`, `claude-3-opus`
+- **Plan path**: Ends with `.md` → treated as plan file
+- **Model**: LiteLLM format `provider/model`. Default: `Azure/gpt-4o`
+  - `Azure/gpt-4o` - GPT-4o on Azure
+  - `GCP/gemini-2.5-flash` - Gemini 2.5 Flash on GCP
+  - `aws/claude-opus-4-6` - Claude Opus 4.6 on AWS
 - **Flags**: `--dry-run`, `--help`, `--no-redact`
 
 ## What It Does

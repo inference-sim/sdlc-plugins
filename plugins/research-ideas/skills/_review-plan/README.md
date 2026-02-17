@@ -25,15 +25,19 @@ export ANTHROPIC_BASE_URL='https://api.anthropic.com'  # optional, this is the d
 ## Usage
 
 ```bash
-# Auto-detect plan (if exactly one .md file in ~/.claude/plans/)
+# Auto-detect plan, use default model (Azure/gpt-4o)
 /review-plan
 
-# Specify a model
-/review-plan gpt-4-turbo
-/review-plan claude-3-opus
+# Specify a model (LiteLLM format: provider/model)
+/review-plan GCP/gemini-2.5-flash
+/review-plan aws/claude-opus-4-6
+/review-plan Azure/gpt-4o
 
 # Explicit plan path
 /review-plan ~/.claude/plans/my-plan.md
+
+# Combine plan path and model
+/review-plan ~/.claude/plans/my-plan.md GCP/gemini-2.5-flash
 
 # Verify configuration without API call
 /review-plan --dry-run
@@ -45,11 +49,21 @@ All arguments are optional:
 
 | Argument | Description |
 |----------|-------------|
-| `plan_path` | Path to plan file (detected by `/` or `.md` suffix) |
-| `model` | Model name (default: `gpt-4o`) |
+| `plan_path` | Path to plan file (detected by `.md` suffix) |
+| `model` | LiteLLM model name (default: `Azure/gpt-4o`) |
 | `--dry-run` | Show config without calling API |
 | `--no-redact` | Disable secret redaction (not recommended) |
 | `--help` | Show usage help |
+
+## Available Models
+
+Via LiteLLM proxy:
+
+| Model | Description |
+|-------|-------------|
+| `Azure/gpt-4o` | GPT-4o on Azure (default) |
+| `GCP/gemini-2.5-flash` | Gemini 2.5 Flash on GCP |
+| `aws/claude-opus-4-6` | Claude Opus 4.6 on AWS |
 
 ## Plan Resolution
 

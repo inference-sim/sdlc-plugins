@@ -27,8 +27,8 @@ set -euo pipefail  # Exit on error, undefined vars, pipe failures
 # API path (appended to base URL)
 API_PATH="/v1/chat/completions"
 
-# Default model
-DEFAULT_MODEL="gpt-4o"
+# Default model (LiteLLM format: provider/model)
+DEFAULT_MODEL="Azure/gpt-4o"
 
 # Plans directory
 PLANS_DIR="$HOME/.claude/plans"
@@ -69,8 +69,13 @@ Usage:
 
 Arguments (all optional):
   plan_path    Path to plan file (auto-detected if omitted)
-               Detected by: contains "/" or ends with ".md"
-  model        model name (default: gpt-4o)
+               Detected by: ends with ".md"
+  model        LiteLLM model name (default: Azure/gpt-4o)
+
+Available models (via LiteLLM):
+  Azure/gpt-4o           - GPT-4o on Azure
+  GCP/gemini-2.5-flash   - Gemini 2.5 Flash on GCP
+  aws/claude-opus-4-6    - Claude Opus 4.6 on AWS
 
 Flags:
   --dry-run    Show config without calling API
@@ -79,9 +84,9 @@ Flags:
 
 Examples:
   review.sh
-  review.sh gpt-4-turbo
-  review.sh ~/plans/my-plan.md
-  review.sh ./plan.md gpt-4
+  review.sh GCP/gemini-2.5-flash
+  review.sh aws/claude-opus-4-6
+  review.sh ~/plans/my-plan.md Azure/gpt-4o
   review.sh --dry-run
 
 HELP
@@ -89,9 +94,9 @@ HELP
             ;;
         *)
             # Positional argument
-            # Rule: Contains "/" or ends with ".md" → plan_path
+            # Rule: Ends with ".md" → plan_path (LiteLLM models use "/" so we can't use that)
             #       Otherwise → model
-            if [ -z "$EXPLICIT_PLAN_PATH" ] && [[ "$1" == *"/"* || "$1" == *".md" ]]; then
+            if [ -z "$EXPLICIT_PLAN_PATH" ] && [[ "$1" == *".md" ]]; then
                 EXPLICIT_PLAN_PATH="$1"
             elif [ "$MODEL_OVERRIDE" = false ]; then
                 MODEL="$1"
@@ -405,6 +410,9 @@ if [ "$HTTP_CODE" -ne 200 ]; then
             echo "This usually means the model name is invalid or endpoint URL is wrong."
             echo "Check model: $MODEL"
             echo "Check endpoint: $API_ENDPOINT"
+            echo ""
+            echo "Available LiteLLM models:"
+            echo "  Azure/gpt-4o, GCP/gemini-2.5-flash, aws/claude-opus-4-6"
             ;;
         429)
             echo "Rate limit exceeded. Wait a moment and try again."
