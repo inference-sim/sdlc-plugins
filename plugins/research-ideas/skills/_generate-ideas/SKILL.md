@@ -3,6 +3,7 @@ name: _generate-ideas
 description: Generate and review research ideas, appending each iteration to the research document
 user-invocable: false
 allowed-tools:
+  - Task
   - Skill(_review-plan *)
   - Bash(.claude/skills/review-plan/scripts/review.sh *)
   - Bash(python3 *)
@@ -60,27 +61,61 @@ Append the idea to `[RESEARCH_FILE_PATH]` using this format:
 
 ```
 
-## Step 4: Get Reviews (parallel within this step only)
+## Step 4: Get Reviews (3 parallel background agents)
 
-Ask 3 judges to review idea-<i> **in parallel** using the /_review-plan skill.
+Launch 3 background agents **in parallel** to review idea-<i>. Use the Task tool with `run_in_background: true` for each:
 
-**IMPORTANT**: Pass the ENTIRE `[RESEARCH_FILE_PATH]` to each reviewer. The file now contains problem + background + the new idea.
+```
+# Launch all 3 in a SINGLE message with 3 Task tool calls:
 
-Each judge should use a different model:
-- aws/claude-opus-4-6
-- Azure/gpt-4o
-- GCP/gemini-2.5-flash
+Task tool #1:
+  description: "Review with Claude"
+  subagent_type: general-purpose
+  run_in_background: true
+  prompt: |
+    Run /_review-plan [RESEARCH_FILE_PATH] aws/claude-opus-4-6
+    Return the full review content.
 
-YOU MUST USE THE /_review-plan SKILL AND INVOKE ALL THREE MODELS. The judges must provide independent review feedback.
+Task tool #2:
+  description: "Review with GPT-4o"
+  subagent_type: general-purpose
+  run_in_background: true
+  prompt: |
+    Run /_review-plan [RESEARCH_FILE_PATH] Azure/gpt-4o
+    Return the full review content.
 
-## Step 5: Append Reviews
+Task tool #3:
+  description: "Review with Gemini"
+  subagent_type: general-purpose
+  run_in_background: true
+  prompt: |
+    Run /_review-plan [RESEARCH_FILE_PATH] GCP/gemini-2.5-flash
+    Return the full review content.
+```
 
-**WAIT for ALL reviewers to complete.** Then append each reviewer's feedback to `[RESEARCH_FILE_PATH]`:
+**IMPORTANT**:
+- Pass the ENTIRE `[RESEARCH_FILE_PATH]` to each reviewer (contains problem + background + new idea)
+- Launch all 3 Task calls in a SINGLE message to maximize parallelism
+- Each agent runs the /_review-plan skill with a different model
+
+## Step 5: Collect and Append Reviews
+
+**WAIT for ALL 3 background agents to complete** using `TaskOutput` for each task_id.
+
+Once all reviews are collected, append each reviewer's feedback to `[RESEARCH_FILE_PATH]`:
 
 ```markdown
-### Review by [Model Name]
+### Review by Claude (aws/claude-opus-4-6)
 
-[Reviewer feedback]
+[Claude's review feedback]
+
+### Review by GPT-4o (Azure/gpt-4o)
+
+[GPT-4o's review feedback]
+
+### Review by Gemini (GCP/gemini-2.5-flash)
+
+[Gemini's review feedback]
 
 ```
 

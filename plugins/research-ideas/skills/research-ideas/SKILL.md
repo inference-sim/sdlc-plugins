@@ -3,6 +3,7 @@ name: research-ideas
 description: Generate iteratively-reviewed research ideas from a problem statement. One command creates a complete research document.
 argument-hint: <problem_file_path> [num_iterations]
 allowed-tools:
+  - Task
   - Skill(_background-summary *)
   - Skill(_generate-ideas *)
   - Skill(_review-plan *)
@@ -25,32 +26,61 @@ allowed-tools:
 
 Generate creative, novel, and practical research ideas for the given problem statement. Each idea is reviewed by multiple AI models and feedback is used to improve subsequent ideas. Everything is written to a single research document.
 
+**All stages run as background agents** to provide progress visibility and enable parallel execution where possible.
+
 # STEPS
 
-## Step 1: Create Research Document with Background
+## Step 1: Create Research Document with Background (Background Agent)
 
-Invoke the _background-summary skill:
-
-```
-/_background-summary [PROBLEM_FILE_PATH]
-```
-
-This creates `[RESEARCH_FILE]` containing:
-- The problem statement (copied from input file)
-- Background context from exploring the repository
-
-## Step 2: Generate and Review Ideas
-
-Invoke the _generate-ideas skill:
+Launch a background agent to create the initial research document:
 
 ```
-/_generate-ideas [RESEARCH_FILE] [NUM_ITERATIONS]
+Task tool:
+  description: "Generate background summary"
+  subagent_type: general-purpose
+  run_in_background: true
+  prompt: |
+    Run the /_background-summary skill with argument: [PROBLEM_FILE_PATH]
+
+    This will create [RESEARCH_FILE] containing the problem statement and repository context.
 ```
 
-This appends to `[RESEARCH_FILE]`:
-- Each idea with full content
-- Reviews from 3 AI models (Claude, GPT-4o, Gemini) for each idea
-- Executive summary with recommendations
+**Wait for the background agent to complete** before proceeding. Use `Read` to verify `[RESEARCH_FILE]` exists.
+
+## Step 2: Generate and Review Ideas (Background Agent)
+
+Launch a background agent to generate ideas and collect reviews:
+
+```
+Task tool:
+  description: "Generate and review ideas"
+  subagent_type: general-purpose
+  run_in_background: true
+  prompt: |
+    Run the /_generate-ideas skill with arguments: [RESEARCH_FILE] [NUM_ITERATIONS]
+
+    For each idea iteration, launch 3 review agents IN PARALLEL using the Task tool:
+
+    For each of these models: aws/claude-opus-4-6, Azure/gpt-4o, GCP/gemini-2.5-flash
+      Task tool:
+        description: "Review idea with [MODEL_NAME]"
+        subagent_type: general-purpose
+        run_in_background: true
+        prompt: |
+          Run /_review-plan [RESEARCH_FILE] [MODEL_NAME]
+          Return the review content.
+
+    Wait for all 3 review agents to complete, then append their feedback to [RESEARCH_FILE].
+
+    IMPORTANT: Complete all reviews for idea N before generating idea N+1.
+```
+
+## Step 3: Monitor Progress
+
+While background agents are running:
+1. Use `TaskOutput` with `block: false` to check progress
+2. Report status updates to the user
+3. Wait for completion before reporting final results
 
 # OUTPUT
 
