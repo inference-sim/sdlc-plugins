@@ -6,7 +6,7 @@ allowed-tools:
   - Bash(python3 *)
   - Bash(curl *)
   - Bash(jq *)
-argument-hint: [plan_path] [model] [--dry-run]
+argument-hint: "<plan_path> [model] [--dry-run]"
 ---
 
 # Review Plan with an LLM

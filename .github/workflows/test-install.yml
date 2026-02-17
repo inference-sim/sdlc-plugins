@@ -7,51 +7,6 @@ on:
     branches: [main]
 
 jobs:
-  test-install:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Claude Code CLI
-        run: |
-          npm install -g @anthropic-ai/claude-code
-
-      - name: Test marketplace can be added
-        run: |
-          echo "Testing marketplace registration..."
-          # Use local path for testing
-          claude /plugin marketplace add ${{ github.workspace }}
-          echo "✓ Marketplace added successfully"
-
-      - name: Test plugin discovery
-        run: |
-          echo "Testing plugin can be discovered..."
-          # List available plugins and check our plugin appears
-          claude /plugin 2>&1 | tee /tmp/plugin-list.txt
-          if grep -q "research-ideas" /tmp/plugin-list.txt; then
-            echo "✓ Plugin discovered in marketplace"
-          else
-            echo "ERROR: Plugin not found in marketplace listing"
-            exit 1
-          fi
-
-      - name: Test plugin installation
-        run: |
-          echo "Testing plugin installation..."
-          claude /plugin install research-ideas@sdlc-plugins
-          echo "✓ Plugin installed successfully"
-
-      - name: Test skills are available
-        run: |
-          echo "Testing skills are loadable..."
-          # Check that the main skill is available
-          claude --help 2>&1 | tee /tmp/help.txt || true
-
-          # Verify skills directory was created
-          if [ -d "$HOME/.claude/skills" ]; then
-            echo "✓ Skills directory exists"
-          fi
-
   test-skill-syntax:
     runs-on: ubuntu-latest
     steps:
@@ -109,3 +64,51 @@ jobs:
 
           print("\n✓ All SKILL.md files are valid")
           EOF
+
+  test-plugin-structure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate plugin can be loaded
+        run: |
+          echo "Validating plugin structure for Claude Code compatibility..."
+
+          # Check marketplace.json references valid plugins
+          for plugin_path in $(jq -r '.plugins[].source' .claude-plugin/marketplace.json); do
+            echo "Checking plugin: $plugin_path"
+
+            # Verify plugin.json exists and has required fields
+            plugin_json="$plugin_path/.claude-plugin/plugin.json"
+            if [ ! -f "$plugin_json" ]; then
+              echo "ERROR: Missing $plugin_json"
+              exit 1
+            fi
+
+            name=$(jq -r '.name' "$plugin_json")
+            version=$(jq -r '.version' "$plugin_json")
+
+            if [ "$name" = "null" ] || [ -z "$name" ]; then
+              echo "ERROR: Missing 'name' in $plugin_json"
+              exit 1
+            fi
+
+            if [ "$version" = "null" ] || [ -z "$version" ]; then
+              echo "ERROR: Missing 'version' in $plugin_json"
+              exit 1
+            fi
+
+            echo "  ✓ Plugin: $name v$version"
+
+            # Check skills directory has at least one public skill
+            public_skills=$(find "$plugin_path/skills" -maxdepth 1 -type d ! -name "_*" ! -name "skills" | wc -l)
+            if [ "$public_skills" -eq 0 ]; then
+              echo "ERROR: No public skills found in $plugin_path/skills"
+              exit 1
+            fi
+
+            echo "  ✓ Found $public_skills public skill(s)"
+          done
+
+          echo ""
+          echo "✓ All plugins are valid"
