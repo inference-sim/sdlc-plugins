@@ -41,6 +41,9 @@ For private repo access, use SSH keys or set `GITHUB_TOKEN`:
 export GITHUB_TOKEN=$(gh auth token)
 ```
 
+## Examples
+See example output [here](examples/).
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for plugin development.
