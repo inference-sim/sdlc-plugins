@@ -1,0 +1,20 @@
+{
+  "name": "sdlc-plugins",
+  "owner": {
+    "name": "AI Platform Optimization",
+    "email": "ai-platform-org@ibm.com"
+  },
+  "metadata": {
+    "description": "Internal SDLC plugins for the team",
+    "version": "1.0.0",
+    "pluginRoot": "./plugins"
+  },
+  "plugins": [
+    {
+      "name": "research-ideas",
+      "source": "./plugins/research-ideas",
+      "description": "Generate iteratively-reviewed research ideas with multi-model feedback",
+      "version": "1.0.0"
+    }
+  ]
+}

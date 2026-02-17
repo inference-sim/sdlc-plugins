@@ -1,0 +1,111 @@
+name: Test Plugin Installation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Claude Code CLI
+        run: |
+          npm install -g @anthropic-ai/claude-code
+
+      - name: Test marketplace can be added
+        run: |
+          echo "Testing marketplace registration..."
+          # Use local path for testing
+          claude /plugin marketplace add ${{ github.workspace }}
+          echo "✓ Marketplace added successfully"
+
+      - name: Test plugin discovery
+        run: |
+          echo "Testing plugin can be discovered..."
+          # List available plugins and check our plugin appears
+          claude /plugin 2>&1 | tee /tmp/plugin-list.txt
+          if grep -q "research-ideas" /tmp/plugin-list.txt; then
+            echo "✓ Plugin discovered in marketplace"
+          else
+            echo "ERROR: Plugin not found in marketplace listing"
+            exit 1
+          fi
+
+      - name: Test plugin installation
+        run: |
+          echo "Testing plugin installation..."
+          claude /plugin install research-ideas@sdlc-plugins
+          echo "✓ Plugin installed successfully"
+
+      - name: Test skills are available
+        run: |
+          echo "Testing skills are loadable..."
+          # Check that the main skill is available
+          claude --help 2>&1 | tee /tmp/help.txt || true
+
+          # Verify skills directory was created
+          if [ -d "$HOME/.claude/skills" ]; then
+            echo "✓ Skills directory exists"
+          fi
+
+  test-skill-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate SKILL.md YAML frontmatter
+        run: |
+          pip install pyyaml
+
+          python3 << 'EOF'
+          import yaml
+          import sys
+          from pathlib import Path
+
+          errors = []
+
+          for skill_file in Path("plugins").rglob("SKILL.md"):
+              print(f"Checking {skill_file}...")
+              content = skill_file.read_text()
+
+              # Extract frontmatter between --- markers
+              if not content.startswith("---"):
+                  errors.append(f"{skill_file}: Missing frontmatter (must start with ---)")
+                  continue
+
+              parts = content.split("---", 2)
+              if len(parts) < 3:
+                  errors.append(f"{skill_file}: Invalid frontmatter (missing closing ---)")
+                  continue
+
+              frontmatter = parts[1].strip()
+
+              try:
+                  data = yaml.safe_load(frontmatter)
+                  if not isinstance(data, dict):
+                      errors.append(f"{skill_file}: Frontmatter must be a YAML dictionary")
+                      continue
+
+                  # Check required fields
+                  if "name" not in data:
+                      errors.append(f"{skill_file}: Missing required field 'name'")
+                  if "description" not in data:
+                      errors.append(f"{skill_file}: Missing required field 'description'")
+
+                  print(f"  ✓ Valid: name={data.get('name')}")
+
+              except yaml.YAMLError as e:
+                  errors.append(f"{skill_file}: Invalid YAML: {e}")
+
+          if errors:
+              print("\n❌ Validation errors:")
+              for error in errors:
+                  print(f"  - {error}")
+              sys.exit(1)
+
+          print("\n✓ All SKILL.md files are valid")
+          EOF

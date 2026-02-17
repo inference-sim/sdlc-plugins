@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Validate tag matches marketplace version
+        run: |
+          marketplace_version=$(jq -r '.metadata.version' .claude-plugin/marketplace.json)
+          tag_version="${{ steps.version.outputs.version }}"
+
+          if [ "$marketplace_version" != "$tag_version" ]; then
+            echo "ERROR: Tag version ($tag_version) doesn't match marketplace.json ($marketplace_version)"
+            echo "Update marketplace.json metadata.version before tagging"
+            exit 1
+          fi
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get commits since last tag
+          last_tag=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -n "$last_tag" ]; then
+            echo "Changes since $last_tag:"
+            git log --pretty=format:"- %s" "$last_tag"..HEAD > /tmp/changelog.txt
+          else
+            echo "Initial release"
+            echo "- Initial release" > /tmp/changelog.txt
+          fi
+
+          cat /tmp/changelog.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ steps.version.outputs.version }}
+          body_path: /tmp/changelog.txt
+          draft: false
+          prerelease: false
+
+      - name: Notify team
+        if: success()
+        run: |
+          echo "🚀 Released version ${{ steps.version.outputs.version }}"
+          echo ""
+          echo "Team members can update with:"
+          echo "  /plugin marketplace update sdlc-plugins"
+          echo ""
+          echo "Or reinstall specific plugins:"
+          echo "  /plugin install research-ideas@sdlc-plugins"

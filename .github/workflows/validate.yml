@@ -1,0 +1,89 @@
+name: Validate Plugins
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate-structure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate marketplace.json
+        run: |
+          echo "Checking marketplace.json exists and is valid JSON..."
+          jq . .claude-plugin/marketplace.json
+
+      - name: Validate plugin structure
+        run: |
+          echo "Checking all registered plugins have required files..."
+
+          # Extract plugin sources from marketplace.json
+          plugins=$(jq -r '.plugins[].source' .claude-plugin/marketplace.json)
+
+          for plugin_path in $plugins; do
+            echo "Validating: $plugin_path"
+
+            # Check plugin.json exists
+            if [ ! -f "$plugin_path/.claude-plugin/plugin.json" ]; then
+              echo "ERROR: Missing $plugin_path/.claude-plugin/plugin.json"
+              exit 1
+            fi
+
+            # Validate plugin.json is valid JSON
+            jq . "$plugin_path/.claude-plugin/plugin.json"
+
+            # Check skills directory exists
+            if [ ! -d "$plugin_path/skills" ]; then
+              echo "ERROR: Missing $plugin_path/skills directory"
+              exit 1
+            fi
+
+            # Check at least one skill exists
+            skill_count=$(find "$plugin_path/skills" -name "SKILL.md" | wc -l)
+            if [ "$skill_count" -eq 0 ]; then
+              echo "ERROR: No SKILL.md files found in $plugin_path/skills"
+              exit 1
+            fi
+
+            echo "✓ $plugin_path is valid"
+          done
+
+      - name: Validate skill files
+        run: |
+          echo "Checking all SKILL.md files have required frontmatter..."
+
+          find plugins -name "SKILL.md" | while read skill_file; do
+            echo "Checking: $skill_file"
+
+            # Check for required frontmatter fields
+            if ! head -50 "$skill_file" | grep -q "^name:"; then
+              echo "ERROR: $skill_file missing 'name:' in frontmatter"
+              exit 1
+            fi
+
+            if ! head -50 "$skill_file" | grep -q "^description:"; then
+              echo "ERROR: $skill_file missing 'description:' in frontmatter"
+              exit 1
+            fi
+
+            echo "✓ $skill_file has valid frontmatter"
+          done
+
+      - name: Check version consistency
+        run: |
+          echo "Checking version consistency between marketplace.json and plugin.json..."
+
+          jq -r '.plugins[] | "\(.source) \(.version)"' .claude-plugin/marketplace.json | while read source version; do
+            plugin_version=$(jq -r '.version' "$source/.claude-plugin/plugin.json")
+            if [ "$version" != "$plugin_version" ]; then
+              echo "ERROR: Version mismatch for $source"
+              echo "  marketplace.json: $version"
+              echo "  plugin.json: $plugin_version"
+              exit 1
+            fi
+            echo "✓ $source version $version is consistent"
+          done
