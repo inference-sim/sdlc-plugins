@@ -1,7 +1,7 @@
 ---
 name: _generate-ideas
 description: Generate and review research ideas, appending each iteration to the research document
-argument-hint: <research_file_path> [num_iterations]
+user-invocable: false
 allowed-tools:
   - Skill(_review-plan *)
   - Bash(.claude/skills/review-plan/scripts/review.sh *)

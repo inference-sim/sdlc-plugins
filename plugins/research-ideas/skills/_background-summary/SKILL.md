@@ -1,7 +1,7 @@
 ---
 name: _background-summary
 description: Create research document with problem statement and repository context
-argument-hint: <problem_file_path>
+user-invocable: false
 ---
 
 # ARGUMENTS

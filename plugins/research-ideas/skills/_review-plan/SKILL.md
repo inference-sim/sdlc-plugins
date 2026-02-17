@@ -1,6 +1,7 @@
 ---
 name: _review-plan
 description: Send Claude plan to an LLM for external technical review
+user-invocable: false
 allowed-tools:
   - Bash(~/.claude/skills/review-plan/scripts/review.sh *)
   - Bash(python3 *)
