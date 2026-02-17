@@ -168,7 +168,7 @@ KEY_SOURCE=""
 
 if [ -n "${OPENAI_API_KEY:-}" ]; then
     API_KEY="$OPENAI_API_KEY"
-    API_BASE_URL="${OPENAI_URL:-https://api.openai.com}"
+    API_BASE_URL="${OPENAI_BASE_URL:-${OPENAI_URL:-https://api.openai.com}}"
     KEY_SOURCE="OPENAI_API_KEY"
 elif [ -n "${ANTHROPIC_AUTH_TOKEN:-}" ]; then
     API_KEY="$ANTHROPIC_AUTH_TOKEN"

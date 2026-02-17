@@ -10,7 +10,7 @@ Set environment variables for your API provider:
 
 ```bash
 export OPENAI_API_KEY='your-openai-key'
-export OPENAI_URL='https://api.openai.com'  # optional, this is the default
+export OPENAI_BASE_URL='https://api.openai.com'  # optional, also accepts OPENAI_URL
 ```
 
 ### Option 2: Anthropic (fallback)
