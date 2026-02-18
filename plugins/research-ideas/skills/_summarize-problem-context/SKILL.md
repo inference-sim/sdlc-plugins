@@ -1,5 +1,5 @@
 ---
-name: _background-summary
+name: _summarize-problem-context
 description: Create research document with problem statement and repository context
 user-invocable: false
 ---

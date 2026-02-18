@@ -14,7 +14,7 @@
       "name": "research-ideas",
       "source": "./plugins/research-ideas",
       "description": "Generate iteratively-reviewed research ideas with multi-model feedback",
-      "version": "1.0.1"
+      "version": "1.1.0"
     }
   ]
 }

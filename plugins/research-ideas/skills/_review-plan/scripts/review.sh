@@ -39,6 +39,10 @@ REDACTION_ENABLED=true
 # Dry-run mode off by default
 DRY_RUN=false
 
+# Check-models mode off by default
+CHECK_MODELS=false
+MODELS_TO_CHECK=()
+
 # Script directory (for helper scripts)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -60,6 +64,19 @@ while [[ $# -gt 0 ]]; do
             REDACTION_ENABLED=false
             shift
             ;;
+        --check-models)
+            CHECK_MODELS=true
+            shift
+            # Collect all following arguments as models until we hit another flag
+            while [[ $# -gt 0 ]] && [[ "$1" != --* ]]; do
+                MODELS_TO_CHECK+=("$1")
+                shift
+            done
+            # If no models specified, use defaults
+            if [ ${#MODELS_TO_CHECK[@]} -eq 0 ]; then
+                MODELS_TO_CHECK=("aws/claude-opus-4-6" "Azure/gpt-4o" "GCP/gemini-2.5-flash")
+            fi
+            ;;
         --help|-h)
             cat <<'HELP'
 review.sh - Plan Reviewer (Zero-Config)
@@ -78,9 +95,11 @@ Available models (via LiteLLM):
   aws/claude-opus-4-6    - Claude Opus 4.6 on AWS
 
 Flags:
-  --dry-run    Show config without calling API
-  --no-redact  Disable secret redaction (not recommended)
-  --help       Show this help
+  --dry-run       Show config without calling API
+  --check-models  Test connectivity to models (default: all 3 models)
+                  Optionally specify models: --check-models Azure/gpt-4o aws/claude-opus-4-6
+  --no-redact     Disable secret redaction (not recommended)
+  --help          Show this help
 
 Examples:
   review.sh
@@ -88,6 +107,8 @@ Examples:
   review.sh aws/claude-opus-4-6
   review.sh ~/plans/my-plan.md Azure/gpt-4o
   review.sh --dry-run
+  review.sh --check-models                           # Test all 3 models
+  review.sh --check-models Azure/gpt-4o              # Test only GPT-4o
 
 HELP
             exit 0
@@ -203,9 +224,177 @@ fi
 # Construct full endpoint (base + path)
 API_ENDPOINT="${API_BASE_URL}${API_PATH}"
 
+# IMPORTANT: Warn if using Anthropic credentials with non-Claude models or direct Anthropic API
+if [ "$KEY_SOURCE" = "ANTHROPIC_AUTH_TOKEN (fallback)" ]; then
+    # Check if pointing directly to Anthropic's API (not a proxy)
+    if [[ "$API_BASE_URL" == *"api.anthropic.com"* ]]; then
+        echo ""
+        echo "═══════════════════════════════════════════════════════════"
+        echo "  ⚠️  CONFIGURATION ISSUE DETECTED"
+        echo "═══════════════════════════════════════════════════════════"
+        echo ""
+        echo "  You have ANTHROPIC_AUTH_TOKEN set with ANTHROPIC_BASE_URL"
+        echo "  pointing to api.anthropic.com, but this skill requires an"
+        echo "  OpenAI-compatible endpoint (like a LiteLLM proxy)."
+        echo ""
+        echo "  Anthropic's native API uses a different format than OpenAI,"
+        echo "  so direct calls to api.anthropic.com will fail."
+        echo ""
+        echo "  ╔════════════════════════════════════════════════════════╗"
+        echo "  ║  HOW TO FIX                                            ║"
+        echo "  ╚════════════════════════════════════════════════════════╝"
+        echo ""
+        echo "  Option 1: Use a LiteLLM proxy (recommended)"
+        echo "  ────────────────────────────────────────────"
+        echo "  Point ANTHROPIC_BASE_URL to your LiteLLM proxy:"
+        echo ""
+        echo "    export ANTHROPIC_AUTH_TOKEN='your-key'"
+        echo "    export ANTHROPIC_BASE_URL='http://localhost:4000'  # your LiteLLM proxy"
+        echo ""
+        echo "  Option 2: Use OpenAI credentials instead"
+        echo "  ────────────────────────────────────────────"
+        echo "  Set OpenAI env vars (takes priority over Anthropic):"
+        echo ""
+        echo "    export OPENAI_API_KEY='your-key'"
+        echo "    export OPENAI_BASE_URL='https://api.openai.com'  # or your proxy"
+        echo ""
+        echo "  Option 3: Use an OpenAI-compatible proxy for Anthropic"
+        echo "  ────────────────────────────────────────────"
+        echo "  Some providers offer OpenAI-compatible endpoints for Claude."
+        echo "  Check your provider's docs for the /v1/chat/completions endpoint."
+        echo ""
+        echo "═══════════════════════════════════════════════════════════"
+        echo ""
+        exit 1
+    fi
+
+    # Warn if using GPT/Gemini models with Anthropic credentials (likely misconfigured)
+    if [[ "$MODEL" != *"claude"* ]] && [[ "$MODEL" != *"anthropic"* ]]; then
+        echo ""
+        echo "   ⚠️  WARNING: Using Anthropic credentials with model: $MODEL"
+        echo "      This may fail unless your proxy routes $MODEL correctly."
+        echo "      Consider using a Claude model (e.g., aws/claude-opus-4-6)"
+        echo "      or setting OPENAI_API_KEY instead."
+        echo ""
+    fi
+fi
+
 echo "   ✓ Using: $KEY_SOURCE"
 echo "   ✓ Endpoint: $API_BASE_URL"
 echo ""
+
+# ============================================================
+# CHECK-MODELS MODE: Test connectivity to models
+# ============================================================
+
+if [ "$CHECK_MODELS" = true ]; then
+    echo "═══════════════════════════════════════════════════════════"
+    echo "  Model Connectivity Check"
+    echo "═══════════════════════════════════════════════════════════"
+    echo ""
+    echo "  Testing ${#MODELS_TO_CHECK[@]} model(s) with minimal API request..."
+    echo ""
+
+    PASSED=0
+    FAILED=0
+    FAILED_MODELS=()
+
+    for CHECK_MODEL in "${MODELS_TO_CHECK[@]}"; do
+        echo -n "  • $CHECK_MODEL ... "
+
+        # Build minimal test request
+        TEST_REQUEST=$(cat <<EOF
+{
+  "model": "$CHECK_MODEL",
+  "messages": [{"role": "user", "content": "Say 'OK' and nothing else."}],
+  "max_tokens": 10
+}
+EOF
+)
+
+        # Make API call with short timeout
+        TEST_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$API_ENDPOINT" \
+            --connect-timeout 10 \
+            --max-time 30 \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $API_KEY" \
+            -d "$TEST_REQUEST" 2>&1)
+
+        # Extract HTTP status code
+        TEST_HTTP_CODE=$(echo "$TEST_RESPONSE" | tail -n1)
+        TEST_BODY=$(echo "$TEST_RESPONSE" | sed '$d')
+
+        if [ "$TEST_HTTP_CODE" = "200" ]; then
+            echo "✅ OK"
+            ((PASSED++))
+        else
+            echo "❌ FAILED (HTTP $TEST_HTTP_CODE)"
+            ((FAILED++))
+            FAILED_MODELS+=("$CHECK_MODEL")
+
+            # Show brief error info
+            case "$TEST_HTTP_CODE" in
+                000)
+                    echo "      → Connection failed (check endpoint URL)"
+                    ;;
+                401)
+                    echo "      → Authentication failed (check API key)"
+                    ;;
+                404)
+                    echo "      → Model not found or endpoint invalid"
+                    if [[ "$API_ENDPOINT" == *"anthropic.com"* ]]; then
+                        echo "      → NOTE: api.anthropic.com doesn't support /v1/chat/completions"
+                    fi
+                    ;;
+                400)
+                    echo "      → Bad request (API format mismatch)"
+                    ;;
+                429)
+                    echo "      → Rate limited"
+                    ;;
+                *)
+                    # Try to extract error message
+                    ERROR_MSG=$(echo "$TEST_BODY" | jq -r '.error.message // .message // empty' 2>/dev/null | head -c 80)
+                    if [ -n "$ERROR_MSG" ]; then
+                        echo "      → $ERROR_MSG"
+                    fi
+                    ;;
+            esac
+        fi
+    done
+
+    echo ""
+    echo "───────────────────────────────────────────────────────────"
+    echo "  Results: $PASSED passed, $FAILED failed"
+    echo "───────────────────────────────────────────────────────────"
+
+    if [ $FAILED -gt 0 ]; then
+        echo ""
+        echo "  Failed models: ${FAILED_MODELS[*]}"
+        echo ""
+        echo "  Troubleshooting:"
+        echo "  • Run '/review-plan --dry-run' to verify your configuration"
+        echo "  • Check that your API key has access to these models"
+        echo "  • If using a proxy, verify it routes these model names correctly"
+        echo ""
+
+        if [ "$KEY_SOURCE" = "ANTHROPIC_AUTH_TOKEN (fallback)" ]; then
+            echo "  ⚠️  You're using Anthropic credentials."
+            echo "     Make sure ANTHROPIC_BASE_URL points to a LiteLLM proxy,"
+            echo "     NOT directly to api.anthropic.com."
+            echo ""
+        fi
+
+        echo "═══════════════════════════════════════════════════════════"
+        exit 1
+    else
+        echo ""
+        echo "  ✅ All models are reachable!"
+        echo ""
+        echo "═══════════════════════════════════════════════════════════"
+        exit 0
+    fi
+fi
 
 # ============================================================
 # STEP 3: LOCATE PLAN FILE (THREE-TIER RESOLUTION)
@@ -405,14 +594,57 @@ if [ "$HTTP_CODE" -ne 200 ]; then
         401)
             echo "This usually means your API key is invalid or expired."
             echo "Check your $KEY_SOURCE environment variable."
+            echo ""
+            # Extra guidance for credential/model mismatches
+            if [ "$KEY_SOURCE" = "ANTHROPIC_AUTH_TOKEN (fallback)" ] && [[ "$MODEL" != *"claude"* ]]; then
+                echo "NOTE: You're using Anthropic credentials with model '$MODEL'."
+                echo "      This will only work if your proxy at $API_BASE_URL"
+                echo "      accepts Anthropic tokens for routing to other providers."
+                echo ""
+                echo "      To use GPT/Gemini directly, set OPENAI_API_KEY instead:"
+                echo "        export OPENAI_API_KEY='your-key'"
+                echo "        export OPENAI_BASE_URL='your-proxy-url'"
+            fi
             ;;
         404)
             echo "This usually means the model name is invalid or endpoint URL is wrong."
             echo "Check model: $MODEL"
             echo "Check endpoint: $API_ENDPOINT"
             echo ""
-            echo "Available LiteLLM models:"
-            echo "  Azure/gpt-4o, GCP/gemini-2.5-flash, aws/claude-opus-4-6"
+            # Check for common misconfigurations
+            if [[ "$API_ENDPOINT" == *"api.anthropic.com"* ]]; then
+                echo "═══════════════════════════════════════════════════════════"
+                echo "  LIKELY ISSUE: api.anthropic.com doesn't support /v1/chat/completions"
+                echo "═══════════════════════════════════════════════════════════"
+                echo ""
+                echo "  Anthropic's native API uses /v1/messages, not /v1/chat/completions."
+                echo "  This skill requires an OpenAI-compatible endpoint."
+                echo ""
+                echo "  FIX: Point ANTHROPIC_BASE_URL to a LiteLLM proxy or"
+                echo "       OpenAI-compatible service, NOT api.anthropic.com."
+                echo ""
+                echo "  Example:"
+                echo "    export ANTHROPIC_BASE_URL='http://localhost:4000'  # LiteLLM proxy"
+                echo ""
+            else
+                echo "Available LiteLLM models:"
+                echo "  Azure/gpt-4o, GCP/gemini-2.5-flash, aws/claude-opus-4-6"
+            fi
+            ;;
+        400)
+            echo "Bad request - the API rejected the request format."
+            echo ""
+            if [[ "$API_ENDPOINT" == *"anthropic.com"* ]]; then
+                echo "═══════════════════════════════════════════════════════════"
+                echo "  LIKELY ISSUE: Wrong API format for Anthropic"
+                echo "═══════════════════════════════════════════════════════════"
+                echo ""
+                echo "  This skill uses OpenAI-compatible request format."
+                echo "  Anthropic's native API requires a different format."
+                echo ""
+                echo "  FIX: Use a LiteLLM proxy instead of api.anthropic.com"
+                echo ""
+            fi
             ;;
         429)
             echo "Rate limit exceeded. Wait a moment and try again."
