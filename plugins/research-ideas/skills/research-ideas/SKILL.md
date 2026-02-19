@@ -1,7 +1,6 @@
 ---
 name: research-ideas
 description: Generate iteratively-reviewed research ideas from a problem statement. One command creates a complete research document.
-argument-hint: <problem_file_path> [num_iterations]
 allowed-tools:
   - Task
   - AskUserQuestion

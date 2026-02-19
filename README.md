@@ -29,10 +29,15 @@ Private Claude Code plugins for the AI Platform Optimization team.
 Generates research ideas with multi-model AI review (Claude, GPT-4o, Gemini).
 
 ```bash
-/research-ideas <problem_file> [iterations]
+/research-ideas
 ```
 
-Each iteration improves based on previous feedback. Outputs a single `research.md` with all ideas and reviews.
+Just run the command and let it guide you. The plugin will:
+1. Help you create or locate a problem statement
+2. Auto-detect your API configuration
+3. Generate iteratively-reviewed ideas
+
+Outputs a single `research.md` with all ideas and reviews.
 
 ## Authentication
 
