@@ -163,10 +163,10 @@ When running reviews from **background agents** (e.g., in the `/research-ideas` 
 ```yaml
 Task tool:
   subagent_type: review-agent
-  prompt: "Run /_review-plan [PLAN_FILE] [MODEL]"
+  prompt: "Run /review-plan [PLAN_FILE] [MODEL]"
 ```
 
-**Why a custom agent?** Background agents spawned via the Task tool have restricted permissions by default and cannot invoke Skills. The `review-agent` (defined in `agents/review-agent.md`) has explicit permission to use the `_review-plan` skill without requiring `bypassPermissions` mode.
+**Why a custom agent?** Background agents spawned via the Task tool have restricted permissions by default and cannot invoke Skills. The `review-agent` (defined in `agents/review-agent.md`) has explicit permission to use the `review-plan` skill without requiring `bypassPermissions` mode.
 
 Both approaches use the same skill and produce identical results.
 

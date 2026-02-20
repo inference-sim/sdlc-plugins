@@ -3,7 +3,7 @@ name: review-agent
 description: Runs plan reviews via external LLM APIs. Use for background review tasks in research-ideas workflow.
 tools: Bash, Read
 skills:
-  - _review-plan
+  - review-plan
 ---
 
 # Review Agent
@@ -15,7 +15,7 @@ A specialized agent for running plan reviews against external LLM APIs.
 This agent exists to enable parallel background reviews in the `/research-ideas` workflow. It has minimal permissions:
 - **Bash**: Required to run `review.sh` if skill invocation fails
 - **Read**: To read plan content if needed
-- **Skill `_review-plan`**: The primary interface for running reviews
+- **Skill `review-plan`**: The primary interface for running reviews
 
 ## Usage
 
@@ -27,7 +27,7 @@ Task tool:
   subagent_type: review-agent
   run_in_background: true
   prompt: |
-    Run /_review-plan [RESEARCH_FILE] [MODEL_NAME]
+    Run /review-plan [RESEARCH_FILE] [MODEL_NAME]
     Return the review content.
 ```
 

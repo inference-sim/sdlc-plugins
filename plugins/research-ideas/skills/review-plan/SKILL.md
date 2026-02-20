@@ -1,7 +1,7 @@
 ---
-name: _review-plan
+name: review-plan
 description: Send Claude plan to an LLM for external technical review
-user-invocable: false
+user-invocable: true
 allowed-tools:
   - Bash(**/review.sh *)
   - Bash(python3 *)
@@ -20,7 +20,7 @@ Get independent technical feedback on your Claude Code plan from an LLM.
 **IMPORTANT:** Before running any commands, locate the `review.sh` script:
 
 ```
-Glob: **/skills/_review-plan/scripts/review.sh
+Glob: **/skills/review-plan/scripts/review.sh
 ```
 
 Store the result as `[REVIEW_SCRIPT]`. Use this path for all subsequent bash commands.

@@ -18,6 +18,16 @@ allowed-tools:
 
 - `[PROBLEM_FILE_PATH]` (required): Path to a file containing the problem statement
 
+**Optional pre-configured sources** (if provided, skip asking user):
+- `[INCLUDE_CURRENT_REPO]` (optional): true/false - include current repository
+- `[LOCAL_REPO_PATHS]` (optional): List of local repository paths
+- `[GITHUB_REPO_URLS]` (optional): List of GitHub repository URLs
+- `[REMOTE_URLS]` (optional): List of paper/documentation URLs
+- `[WEB_SEARCH_QUERIES]` (optional): List of web search queries
+- `[SKIP_BACKGROUND]` (optional): true to skip background entirely
+
+**If any optional source arguments are provided, skip Steps 2-3 and proceed directly to Step 4 (Launch Agents).**
+
 # DERIVED PATHS
 
 - `[PROBLEM_DIR]` = directory containing the problem file
@@ -36,9 +46,13 @@ Read and understand the problem statement from `[PROBLEM_FILE_PATH]`. Identify:
 - Key technical domains involved
 - Specific components, modules, or areas that may be relevant
 
-## Step 2: Ask About Context Sources
+## Step 2: Ask About Context Sources (Skip if pre-configured)
 
-**Current repository is included by default.** Ask about additional sources:
+**If source arguments were provided (any of `[INCLUDE_CURRENT_REPO]`, `[LOCAL_REPO_PATHS]`, `[GITHUB_REPO_URLS]`, `[REMOTE_URLS]`, `[WEB_SEARCH_QUERIES]`), skip Steps 2-3 and proceed directly to Step 4.**
+
+**If `[SKIP_BACKGROUND]` = true, skip to Step 5 and create a minimal document with just the problem statement.**
+
+**Otherwise, current repository is included by default.** Ask about additional sources:
 
 ```
 AskUserQuestion:

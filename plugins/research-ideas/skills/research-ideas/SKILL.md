@@ -13,7 +13,7 @@ allowed-tools:
   - Write
   - Skill(_summarize-problem-context *)
   - Skill(_generate-ideas *)
-  - Skill(_review-plan *)
+  - Skill(review-plan *)
   - Bash(python3 *)
   - Bash(curl *)
   - Bash(jq *)
@@ -330,7 +330,7 @@ Set `[BACKGROUND_MODE]` = "auto" and pass all collected paths to `/_summarize-pr
 Run this check silently to discover which models are accessible:
 
 ```
-Skill(_review-plan --check-models aws/claude-opus-4-6 Azure/gpt-4o GCP/gemini-2.5-flash)
+Skill(review-plan --check-models aws/claude-opus-4-6 Azure/gpt-4o GCP/gemini-2.5-flash)
 ```
 
 Parse the output to determine which models passed (look for "✅ OK" or "❌ FAILED" for each model). Store as `[AVAILABLE_MODELS]`.
@@ -511,7 +511,7 @@ AskUserQuestion:
 Then create the research document with user-provided background.
 
 ### If `[BACKGROUND_MODE]` = "auto":
-Launch a background agent to auto-generate background using the `_summarize-problem-context` skill, which will guide the user through selecting multiple context sources (repositories, papers, etc.):
+Launch a background agent to auto-generate background using the `_summarize-problem-context` skill with the pre-configured sources from Step 1:
 
 ```
 Task tool:
@@ -519,12 +519,23 @@ Task tool:
   subagent_type: general-purpose
   run_in_background: true
   prompt: |
-    Run the /_summarize-problem-context skill with argument: [PROBLEM_FILE_PATH]
+    Run the /_summarize-problem-context skill with these arguments:
 
-    This skill will:
-    1. Ask the user about context sources (current repo, other repos, papers/URLs)
-    2. Launch PARALLEL background agents for each source
-    3. Collect and synthesize all summaries into [RESEARCH_FILE]
+    Problem file: [PROBLEM_FILE_PATH]
+
+    Pre-configured sources (DO NOT ask user again - these were already collected):
+    - [INCLUDE_CURRENT_REPO] = [value from Step 1]
+    - [LOCAL_REPO_PATHS] = [list from Step 1, if any]
+    - [GITHUB_REPO_URLS] = [list from Step 1, if any]
+    - [REMOTE_URLS] = [list from Step 1, if any]
+    - [WEB_SEARCH_QUERIES] = [list from Step 1, if any]
+
+    Since sources are pre-configured, skip the asking steps and proceed directly to:
+    1. Launch PARALLEL background agents for each source
+    2. Collect and synthesize all summaries into [RESEARCH_FILE]
+
+    IMPORTANT: Write the background to [RESEARCH_FILE] immediately after the problem statement.
+    The judges will review [RESEARCH_FILE] and need to see both the problem AND background context.
 ```
 
 **Wait for the background agent to complete** before proceeding. Use `Read` to verify `[RESEARCH_FILE]` exists.
@@ -587,7 +598,7 @@ Task tool:
         subagent_type: general-purpose
         run_in_background: true
         prompt: |
-          Run /_review-plan [RESEARCH_FILE] [MODEL_NAME]
+          Run /review-plan [RESEARCH_FILE] [MODEL_NAME]
           Return the review content.
 
     Wait for all review agents to complete, then append their feedback to [RESEARCH_FILE].
@@ -607,7 +618,7 @@ Task tool:
   to your proxy, NOT directly to api.anthropic.com.
 
   Run the connectivity check again to diagnose:
-    /_review-plan --check-models
+    /review-plan --check-models
 ═══════════════════════════════════════════════════════════
 ```
 

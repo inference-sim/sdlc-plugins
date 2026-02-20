@@ -6,11 +6,9 @@ allowed-tools:
   - Task
   - TaskUpdate
   - TaskGet
-  - Skill(_review-plan *)
-  - Bash(.claude/skills/review-plan/scripts/review.sh *)
-  - Bash(python3 *)
-  - Bash(curl *)
-  - Bash(jq *)
+  - Read
+  - Write
+  - Skill(review-plan *)
 ---
 # ARGUMENTS
 
@@ -98,7 +96,7 @@ Task tool #1:
   subagent_type: general-purpose
   run_in_background: true
   prompt: |
-    Run /_review-plan [RESEARCH_FILE_PATH] aws/claude-opus-4-6
+    Run /review-plan [RESEARCH_FILE_PATH] aws/claude-opus-4-6
     Return the full review content.
 
 Task tool #2:
@@ -106,7 +104,7 @@ Task tool #2:
   subagent_type: general-purpose
   run_in_background: true
   prompt: |
-    Run /_review-plan [RESEARCH_FILE_PATH] Azure/gpt-4o
+    Run /review-plan [RESEARCH_FILE_PATH] Azure/gpt-4o
     Return the full review content.
 
 Task tool #3:
@@ -114,14 +112,14 @@ Task tool #3:
   subagent_type: general-purpose
   run_in_background: true
   prompt: |
-    Run /_review-plan [RESEARCH_FILE_PATH] GCP/gemini-2.5-flash
+    Run /review-plan [RESEARCH_FILE_PATH] GCP/gemini-2.5-flash
     Return the full review content.
 ```
 
 **IMPORTANT**:
 - Pass the ENTIRE `[RESEARCH_FILE_PATH]` to each reviewer (contains problem + background + new idea)
 - Launch all 3 Task calls in a SINGLE message to maximize parallelism
-- Each agent runs the /_review-plan skill with a different model
+- Each agent runs the /review-plan skill with a different model
 
 ## Step 5: Collect and Append Reviews
 
