@@ -3,16 +3,33 @@ name: _review-plan
 description: Send Claude plan to an LLM for external technical review
 user-invocable: false
 allowed-tools:
-  - Bash(~/.claude/skills/review-plan/scripts/review.sh *)
+  - Bash(**/review.sh *)
   - Bash(python3 *)
   - Bash(curl *)
   - Bash(jq *)
+  - Glob
 argument-hint: "<plan_path> [model] [--dry-run]"
 ---
 
 # Review Plan with an LLM
 
 Get independent technical feedback on your Claude Code plan from an LLM.
+
+## Finding the Script
+
+**IMPORTANT:** Before running any commands, locate the `review.sh` script:
+
+```
+Glob: **/skills/_review-plan/scripts/review.sh
+```
+
+Store the result as `[REVIEW_SCRIPT]`. Use this path for all subsequent bash commands.
+
+If the script is not found, tell the user:
+```
+Error: Could not find review.sh script.
+Make sure you're running from the sdlc-plugins directory or that the plugin is properly installed.
+```
 
 ## Setup
 
@@ -76,3 +93,23 @@ Test if models are reachable before running a full review:
 
 - ✅ Redacts API keys, private keys, tokens before transmission
 - ⚠️  Plan content is sent to external API
+
+## Execution
+
+After finding `[REVIEW_SCRIPT]` using Glob, run:
+
+```bash
+[REVIEW_SCRIPT] [arguments]
+```
+
+**Examples:**
+```bash
+# Check model connectivity
+[REVIEW_SCRIPT] --check-models aws/claude-opus-4-6 Azure/gpt-4o GCP/gemini-2.5-flash
+
+# Review a plan
+[REVIEW_SCRIPT] /path/to/plan.md Azure/gpt-4o
+
+# Dry run
+[REVIEW_SCRIPT] --dry-run
+```

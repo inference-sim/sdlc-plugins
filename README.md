@@ -7,23 +7,14 @@ Private Claude Code plugins for the AI Platform Optimization team.
 ```bash
 # Add marketplace (one-time)
 /plugin marketplace add https://github.com/inference-sim/sdlc-plugins
+/plugin install research-ideas@sdlc-plugins
 ```
 
 ## Auto-Updates
 
-To enable automatic plugin updates when new versions are released:
+To enable automatic plugin updates when new versions are released, go to `/plugin` > Marketplaces > sdlc-plugins and enable auto-update
 
-```bash
-# Check for updates manually
-/plugin marketplace update sdlc-plugins
-
-# Or reinstall to get latest version
-/plugin install research-ideas@sdlc-plugins
-```
-
-**Recommended:** Run `/plugin marketplace update sdlc-plugins` periodically to get the latest features and fixes.
-
-## Install / Update / Remove
+## Manual Install / Update / Remove
 
 ```bash
 # Install a plugin
@@ -36,7 +27,7 @@ To enable automatic plugin updates when new versions are released:
 /plugin uninstall research-ideas@sdlc-plugins
 ```
 
-## Available Plugins
+## Available skills
 
 ### research-ideas
 
@@ -63,28 +54,16 @@ Outputs a single `research.md` with problem, background, all ideas, reviews, and
 
 #### Creating a Problem Statement
 
-Create a `problem.md` file in your project directory:
-
-````markdown
-# Problem Statement
-
-## Context
-[Describe the background and motivation]
-
-## Problem
-[Clearly state what needs to be solved]
-
-## Constraints
-[Any limitations or requirements]
-
-## Success Criteria
-[How will you know the problem is solved?]
-````
+Create a `problem.md` file in your project directory. Some questions you can consider to help drive the problem statement:
+- Briefly describe the background and motivation
+- State what is needed to be solved
+- Any limitations or requirements
+- How will you define success?
 
 **Need help articulating your problem?** Use the brainstorming superpower:
 
 ```bash
-/brainstorm
+/superpowers:brainstorm brainstorm problem statements for the /research-ideas skill
 ```
 
 This will help you explore and refine your problem statement before generating research ideas.

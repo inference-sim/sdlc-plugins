@@ -14,7 +14,6 @@ allowed-tools:
   - Skill(_summarize-problem-context *)
   - Skill(_generate-ideas *)
   - Skill(_review-plan *)
-  - Bash(.claude/skills/review-plan/scripts/review.sh *)
   - Bash(python3 *)
   - Bash(curl *)
   - Bash(jq *)
@@ -48,6 +47,14 @@ Every invocation of `/research-ideas` presents exactly 5 screens in this order:
 | 3 | "Judges" | Select review models | Always show |
 | 4 | "Iterations" | Set iteration count | Always show |
 | 5 | Dashboard | Show progress tracker | Always show |
+
+## Conditional Screens
+
+These screens appear only when specific conditions are met:
+
+| Condition | Header | Purpose |
+|-----------|--------|---------|
+| research.md exists with content | "Existing Research" | Ask to overwrite, append, or cancel |
 
 ## Rules
 
@@ -111,82 +118,72 @@ If user chooses to create new:
 
 Store result as `[PROBLEM_FILE_PATH]`.
 
----
+### Step 0.3: Check for Existing Research File (Conditional)
 
-## Step 1: Auto-Detect and Configure Review Models (SCREEN 3 - Always Show)
+**Check if `[RESEARCH_FILE]` (`[PROBLEM_DIR]/research.md`) exists and has content.**
 
-**Always show this screen.** Auto-detection runs silently first, then results inform the UI but don't skip it.
-
-**Step 1.1: Auto-detect available models (silent)**
-
-Run this check silently to discover which models are accessible:
-
-```bash
-~/.claude/skills/review-plan/scripts/review.sh --check-models aws/claude-opus-4-6 Azure/gpt-4o GCP/gemini-2.5-flash 2>&1
+```
+Read: [RESEARCH_FILE]
 ```
 
-Parse the output to determine which models passed. Store as `[AVAILABLE_MODELS]`.
-
-**Step 1.2: Present judge configuration (SCREEN 3)**
-
-**Always show all 4 options.** Append availability status to each model option based on Step 1.1 results.
+**If the file exists and is NOT empty, show this screen:**
 
 ```
 AskUserQuestion:
   questions:
-    - question: "Which AI models should review your ideas? (3 recommended for diverse feedback)"
-      header: "Judges"
-      multiSelect: true
-      options:
-        # Labels show availability status inline - NEVER hide options
-        - label: "Claude Opus (aws/claude-opus-4-6) [✓ available]" | "[✗ unavailable]"
-          description: "Strong reasoning and nuanced feedback"
-        - label: "GPT-4o (Azure/gpt-4o) [✓ available]" | "[✗ unavailable]"
-          description: "Broad knowledge and practical suggestions"
-        - label: "Gemini 2.5 Flash (GCP/gemini-2.5-flash) [✓ available]" | "[✗ unavailable]"
-          description: "Fast with good technical insights"
-        - label: "Skip external reviews"
-          description: "Generate ideas without external model reviews"
-```
-
-**IMPORTANT:**
-- All 4 options are ALWAYS shown (deterministic UI)
-- Availability status is shown inline, not used to hide options
-- If user selects an unavailable model, warn them and suggest configuring API access
-- Default: Pre-select all available models (up to 3)
-
-Store selected models as `[REVIEW_MODELS]` (list of available selections only).
-
----
-
-## Step 2: Configure Iteration Count (SCREEN 4 - Always Show)
-
-```
-AskUserQuestion:
-  questions:
-    - question: "How many idea iterations would you like to generate?"
-      header: "Iterations"
+    - question: "Found existing research.md with content. How would you like to proceed?"
+      header: "Existing Research"
       multiSelect: false
       options:
-        - label: "3 iterations (Recommended)"
-          description: "Good balance of exploration and refinement"
-        - label: "5 iterations"
-          description: "More thorough exploration, takes longer"
-        - label: "1 iteration"
-          description: "Quick single idea generation"
-        - label: "Custom number"
-          description: "Enter a specific number in the text field"
+        - label: "Start fresh (Recommended)"
+          description: "Delete existing content and begin a new research session"
+        - label: "Append to existing"
+          description: "Add new ideas after the existing content"
+        - label: "Cancel"
+          description: "Exit without making changes"
 ```
 
-Store as `[NUM_ITERATIONS]` (parse custom if provided, default to 3).
+**If user selects "Append to existing", display this warning:**
+```
+⚠️  IMPORTANT: Appending has consequences!
+
+The review judges will read ONLY research.md, not problem.md separately.
+If this research.md was created for a DIFFERENT problem statement:
+- Judges will see mixed/conflicting context
+- Reviews may be confused or off-topic
+- Results will be less useful
+
+Only append if you're continuing research on the SAME problem.
+```
+
+Then ask for confirmation:
+```
+AskUserQuestion:
+  questions:
+    - question: "Do you want to proceed with appending?"
+      header: "Confirm Append"
+      multiSelect: false
+      options:
+        - label: "Yes, same problem - continue"
+          description: "I understand the judges will only see research.md"
+        - label: "No, start fresh instead"
+          description: "Delete existing content and begin new"
+```
+
+**Actions based on selection:**
+- **Start fresh**: Delete `[RESEARCH_FILE]` content (or the file itself)
+- **Append (confirmed)**: Set `[APPEND_MODE]` = true, keep existing content
+- **Cancel**: Exit skill with message "Cancelled. Your existing research.md is unchanged."
+
+**If the file doesn't exist or is empty:** Skip this screen, continue to Step 1.
 
 ---
 
-## Step 3: Background Context Configuration (SCREEN 2 - Always Show)
+## Step 1: Background Context Configuration (SCREEN 2 - Always Show)
 
 **Always show this screen.** Collect background sources with their paths/URLs.
 
-### Step 3.1: Select Source Types
+### Step 1.1: Select Source Types
 
 ```
 AskUserQuestion:
@@ -222,9 +219,9 @@ AskUserQuestion:
 
 **If "Skip background entirely" or no sources selected:**
 - Set `[BACKGROUND_MODE]` = "skip"
-- Skip to Step 4
+- Skip to Step 2 (Judges)
 
-### Step 3.2: Collect Paths for Selected Sources
+### Step 1.2: Collect Paths for Selected Sources
 
 **For each selected source type, prompt for paths/URLs:**
 
@@ -307,7 +304,7 @@ AskUserQuestion:
 - If user provides: parse input from "Other" text field
 - Store as `[WEB_SEARCH_QUERIES]` (list)
 
-### Step 3.3: Confirm Sources Summary
+### Step 1.3: Confirm Sources Summary
 
 Display collected sources:
 ```
@@ -321,6 +318,75 @@ Background Sources Summary:
 ```
 
 Set `[BACKGROUND_MODE]` = "auto" and pass all collected paths to `/_summarize-problem-context`
+
+---
+
+## Step 2: Auto-Detect and Configure Review Models (SCREEN 3 - Always Show)
+
+**Always show this screen.** Auto-detection runs silently first, then results inform the UI but don't skip it.
+
+**Step 2.1: Auto-detect available models (silent)**
+
+Run this check silently to discover which models are accessible:
+
+```
+Skill(_review-plan --check-models aws/claude-opus-4-6 Azure/gpt-4o GCP/gemini-2.5-flash)
+```
+
+Parse the output to determine which models passed (look for "✅ OK" or "❌ FAILED" for each model). Store as `[AVAILABLE_MODELS]`.
+
+**Step 2.2: Present judge configuration (SCREEN 3)**
+
+**Always show all 4 options.** Append availability status to each model option based on Step 2.1 results.
+
+```
+AskUserQuestion:
+  questions:
+    - question: "Which AI models should review your ideas? (3 recommended for diverse feedback)"
+      header: "Judges"
+      multiSelect: true
+      options:
+        # Labels show availability status inline - NEVER hide options
+        - label: "Claude Opus (aws/claude-opus-4-6) [✓ available]" | "[✗ unavailable]"
+          description: "Strong reasoning and nuanced feedback"
+        - label: "GPT-4o (Azure/gpt-4o) [✓ available]" | "[✗ unavailable]"
+          description: "Broad knowledge and practical suggestions"
+        - label: "Gemini 2.5 Flash (GCP/gemini-2.5-flash) [✓ available]" | "[✗ unavailable]"
+          description: "Fast with good technical insights"
+        - label: "Skip external reviews"
+          description: "Generate ideas without external model reviews"
+```
+
+**IMPORTANT:**
+- All 4 options are ALWAYS shown (deterministic UI)
+- Availability status is shown inline, not used to hide options
+- If user selects an unavailable model, warn them and suggest configuring API access
+- Default: Pre-select all available models (up to 3)
+
+Store selected models as `[REVIEW_MODELS]` (list of available selections only).
+
+---
+
+## Step 3: Configure Iteration Count (SCREEN 4 - Always Show)
+
+```
+AskUserQuestion:
+  questions:
+    - question: "How many idea iterations would you like to generate?"
+      header: "Iterations"
+      multiSelect: false
+      options:
+        - label: "3 iterations (Recommended)"
+          description: "Good balance of exploration and refinement"
+        - label: "5 iterations"
+          description: "More thorough exploration, takes longer"
+        - label: "1 iteration"
+          description: "Quick single idea generation"
+        - label: "Custom number"
+          description: "Enter a specific number in the text field"
+```
+
+Store as `[NUM_ITERATIONS]` (parse custom if provided, default to 3).
 
 ---
 
@@ -407,6 +473,10 @@ TaskUpdate:
   taskId: [BACKGROUND_TASK_ID]
   status: in_progress
 ```
+
+**Respect `[APPEND_MODE]` throughout this step:**
+- If `[APPEND_MODE]` = true: APPEND new content to existing research.md (add a separator like `---\n\n# New Research Session\n`)
+- If `[APPEND_MODE]` = false (default): Create fresh research.md, overwriting any existing content
 
 **Conditional based on `[BACKGROUND_MODE]`:**
 
@@ -537,7 +607,7 @@ Task tool:
   to your proxy, NOT directly to api.anthropic.com.
 
   Run the connectivity check again to diagnose:
-    ~/.claude/skills/review-plan/scripts/review.sh --check-models
+    /_review-plan --check-models
 ═══════════════════════════════════════════════════════════
 ```
 

@@ -267,7 +267,7 @@ Store agent IDs as `[LOCAL_REPO_AGENT_IDS]` (list).
 ```
 Task tool:
   description: "Summarize GitHub repo: [REPO_NAME]"
-  subagent_type: Explore
+  subagent_type: general-purpose
   run_in_background: true
   prompt: |
     Explore and summarize the GitHub repository at: [GITHUB_URL]
