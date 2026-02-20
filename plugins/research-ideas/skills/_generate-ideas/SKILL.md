@@ -14,6 +14,7 @@ allowed-tools:
 
 - `[RESEARCH_FILE_PATH]` (required): Path to `research.md` (created by `/_summarize-problem-context`)
 - `[NUM_ITERATIONS]` (optional, default: 3): Number of ideas to generate
+- `[REVIEW_MODELS]` (required): List of model IDs selected by user (e.g., ["aws/claude-opus-4-6", "Azure/gpt-4o"])
 
 # PROGRESS TRACKING
 
@@ -62,6 +63,12 @@ Generate an idea to solve the problem using:
 - The problem statement and background from the document
 - ALL previously generated ideas AND their reviewer feedback
 
+**IMPORTANT - Holistic Coverage:**
+- If the problem statement contains multiple goals, requirements, or objectives, each idea MUST address ALL of them together
+- If the problem statement contains limitations, constraints, or challenges, each idea MUST address ALL of them together
+- Do NOT generate separate ideas for each goal or limitation - instead, create a single cohesive solution that satisfies all goals and addresses all limitations simultaneously
+- The idea should explain how it addresses each goal, how it overcomes each limitation, and how the different aspects work together
+
 The new idea should address weaknesses identified in previous ideas' reviews.
 
 ## Step 3: Append Idea i
@@ -77,7 +84,7 @@ Append the idea to `[RESEARCH_FILE_PATH]` using this format:
 
 ```
 
-## Step 4: Get Reviews (3 parallel background agents)
+## Step 4: Get Reviews (parallel background agents)
 
 **Update task to show review collection in progress:**
 ```
@@ -86,40 +93,57 @@ TaskUpdate:
   description: "Collecting reviews: 0/[NUM_REVIEWERS] complete"
 ```
 
-Launch 3 background agents **in parallel** to review idea-<i>. Use the Task tool with `run_in_background: true` for each:
+Launch background agents **in parallel** for ALL models in `[REVIEW_MODELS]`.
+
+**CRITICAL: Launch all reviews in ONE message with MULTIPLE Task tool calls to run them in parallel.**
+
+Example if `[REVIEW_MODELS]` = ["aws/claude-opus-4-6", "Azure/gpt-4o"]:
 
 ```
-# Launch all 3 in a SINGLE message with 3 Task tool calls:
+# In a SINGLE message, include MULTIPLE Task tool calls (one per model):
 
 Task tool #1:
-  description: "Review with Claude"
+  description: "Review with aws/claude-opus-4-6"
   subagent_type: general-purpose
   run_in_background: true
   prompt: |
     Run /review-plan [RESEARCH_FILE_PATH] aws/claude-opus-4-6
-    Return the full review content.
+
+    IMPORTANT: Return your response in this exact format:
+    ---
+    MODEL_USED: [the actual model ID that provided this review]
+    REVIEW_CONTENT:
+    [the full review content]
+    ---
+
+    If the requested model fails and you fall back to a different model,
+    report the ACTUAL model used, not the originally requested one.
 
 Task tool #2:
-  description: "Review with GPT-4o"
+  description: "Review with Azure/gpt-4o"
   subagent_type: general-purpose
   run_in_background: true
   prompt: |
     Run /review-plan [RESEARCH_FILE_PATH] Azure/gpt-4o
-    Return the full review content.
 
-Task tool #3:
-  description: "Review with Gemini"
-  subagent_type: general-purpose
-  run_in_background: true
-  prompt: |
-    Run /review-plan [RESEARCH_FILE_PATH] GCP/gemini-2.5-flash
-    Return the full review content.
+    IMPORTANT: Return your response in this exact format:
+    ---
+    MODEL_USED: [the actual model ID that provided this review]
+    REVIEW_CONTENT:
+    [the full review content]
+    ---
+
+    If the requested model fails and you fall back to a different model,
+    report the ACTUAL model used, not the originally requested one.
+
+# ... one Task tool call per model in [REVIEW_MODELS]
 ```
 
 **IMPORTANT**:
+- **PARALLEL EXECUTION**: All Task tool calls MUST be in ONE message to run concurrently
 - Pass the ENTIRE `[RESEARCH_FILE_PATH]` to each reviewer (contains problem + background + new idea)
-- Launch all 3 Task calls in a SINGLE message to maximize parallelism
-- Each agent runs the /review-plan skill with a different model
+- Only launch reviews for models in `[REVIEW_MODELS]` (user's selection)
+- Each agent MUST report the actual model used in case of fallbacks
 
 ## Step 5: Collect and Append Reviews
 
@@ -133,22 +157,25 @@ TaskUpdate:
   description: "Collecting reviews: [COMPLETED]/[NUM_REVIEWERS] complete"
 ```
 
+**Parse each response to extract the ACTUAL model used:**
+- Look for `MODEL_USED:` in the response to get the actual model ID
+- If not found, use the originally requested model ID
+- This ensures accuracy when API failures cause fallbacks to different models
+
 Once all reviews are collected, append each reviewer's feedback to `[RESEARCH_FILE_PATH]`:
 
 ```markdown
-### Review by Claude (aws/claude-opus-4-6)
+### Review by [ACTUAL_MODEL_USED]
 
-[Claude's review feedback]
-
-### Review by GPT-4o (Azure/gpt-4o)
-
-[GPT-4o's review feedback]
-
-### Review by Gemini (GCP/gemini-2.5-flash)
-
-[Gemini's review feedback]
+[Review content]
 
 ```
+
+**CRITICAL - Truthful Attribution:**
+- Use the ACTUAL model that provided the review in the header
+- Do NOT use the originally requested model if a different model was used
+- If a model was unavailable and another was substituted, reflect the substitution accurately
+- Example: If `Azure/gpt-4o` failed and `aws/claude-opus-4-6` was used instead, write "Review by aws/claude-opus-4-6", NOT "Review by Azure/gpt-4o"
 
 ## Step 6: Verify Completion (BLOCKING)
 
@@ -186,6 +213,12 @@ After ALL [NUM_ITERATIONS] iterations are complete, append to `[RESEARCH_FILE_PA
 
 ## Ideas Overview
 [One-paragraph summary of each idea generated]
+
+## Goal Coverage Matrix
+[For each goal/requirement in the problem statement, show how each idea addresses it]
+
+## Limitations Coverage Matrix
+[For each limitation/constraint in the problem statement, show how each idea addresses it]
 
 ## Comparison Table
 [Side-by-side comparison of all ideas across key dimensions]
@@ -226,9 +259,9 @@ After completion, `[RESEARCH_FILE_PATH]` contains everything in one file:
 # Idea 1
 [idea content]
 ## Reviews for Idea 1
-### Review by Claude
-### Review by GPT-4o
-### Review by Gemini
+### Review by [actual-model-1]
+### Review by [actual-model-2]
+... (one per model in [REVIEW_MODELS] that was actually used)
 
 ---
 
@@ -240,5 +273,5 @@ After completion, `[RESEARCH_FILE_PATH]` contains everything in one file:
 ---
 
 # Executive Summary
-[comparison and recommendations]
+[goal coverage matrix, limitations coverage matrix, comparison, and recommendations]
 ```

@@ -582,29 +582,21 @@ Task tool:
   subagent_type: general-purpose
   run_in_background: true
   prompt: |
-    Run the /_generate-ideas skill with arguments: [RESEARCH_FILE] [NUM_ITERATIONS]
-
-    For each idea iteration, launch review agents IN PARALLEL using the Task tool.
-
-    Models to use: [REVIEW_MODELS]  # e.g., ["aws/claude-opus-4-6", "Azure/gpt-4o"]
+    Run the /_generate-ideas skill with arguments:
+    - [RESEARCH_FILE_PATH]: [RESEARCH_FILE]
+    - [NUM_ITERATIONS]: [NUM_ITERATIONS]
+    - [REVIEW_MODELS]: [REVIEW_MODELS]  # e.g., ["aws/claude-opus-4-6", "Azure/gpt-4o"]
 
     **Progress tracking task IDs:**
     - Idea task IDs: [IDEA_TASK_IDS]  # e.g., [2, 3, 4]
     - Summary task ID: [SUMMARY_TASK_ID]
 
-    For each model in [REVIEW_MODELS], launch IN PARALLEL:
-      Task tool:
-        description: "Review idea with [MODEL_NAME]"
-        subagent_type: general-purpose
-        run_in_background: true
-        prompt: |
-          Run /review-plan [RESEARCH_FILE] [MODEL_NAME]
-          Return the review content.
-
-    Wait for all review agents to complete, then append their feedback to [RESEARCH_FILE].
-
-    IMPORTANT: Complete all reviews for idea N before generating idea N+1.
-    Update the corresponding idea task description with sub-status as reviews complete.
+    CRITICAL - Truthful Model Attribution:
+    - Only request reviews from models in [REVIEW_MODELS] (user's selection)
+    - Each review agent MUST report the ACTUAL model that provided the review
+    - If a model fails and falls back to another, record the ACTUAL model used
+    - Do NOT write "Review by GPT-4o" if Claude actually provided the review
+    - The research document must accurately reflect which models were used
 ```
 
 **If reviews fail with 404 or 400 errors**, display:
@@ -651,9 +643,9 @@ A single file `[RESEARCH_FILE]` containing the complete research progression:
 # Idea 1
 [first idea]
 ## Reviews for Idea 1
-### Review by Claude
-### Review by GPT-4o
-### Review by Gemini
+### Review by [actual-model-used-1]
+### Review by [actual-model-used-2]
+... (reviews only from models in [REVIEW_MODELS] that were actually used)
 
 ---
 
@@ -676,3 +668,5 @@ A single file `[RESEARCH_FILE]` containing the complete research progression:
 ```
 
 This single document shows the complete evolution of ideas and how each iteration addresses previous feedback.
+
+**Note:** Review headers reflect the ACTUAL models that provided each review, which may differ from originally requested models if API failures caused fallbacks.

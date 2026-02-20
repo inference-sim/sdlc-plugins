@@ -54,12 +54,25 @@ Add to `.claude-plugin/marketplace.json`:
 
 ## Releasing
 
-```bash
-# Bump version in both plugin.json and marketplace.json
-./scripts/bump-version.sh my-plugin 1.1.0
+### Bump Version
 
+**Option 1: Claude Code command (recommended)**
+```
+/bump-version patch   # 1.2.3 → 1.2.4
+/bump-version minor   # 1.2.3 → 1.3.0
+/bump-version major   # 1.2.3 → 2.0.0
+```
+
+**Option 2: Shell script**
+```bash
+./scripts/bump-version.sh my-plugin 1.1.0
+```
+
+### Commit and Release
+
+```bash
 # Commit and tag
-git add -A && git commit -m "Bump my-plugin to 1.1.0"
+git add -A && git commit -m "chore: bump version to 1.1.0"
 git tag v1.1.0
 
 # Push (triggers release workflow)
