@@ -25,13 +25,15 @@ allowed-tools:
 - `[REMOTE_URLS]` (optional): List of paper/documentation URLs
 - `[WEB_SEARCH_QUERIES]` (optional): List of web search queries
 - `[SKIP_BACKGROUND]` (optional): true to skip background entirely
+- `[OUTPUT_FILE]` (optional): Path for the output file. Defaults to `[PROBLEM_DIR]/research.md`. When set, use this path instead of the default.
+- `[DOCUMENT_TITLE]` (optional): Top-level heading for the output document. Defaults to `"Research Document"`. Example: `"Problem Context"`.
 
 **If any optional source arguments are provided, skip Steps 2-3 and proceed directly to Step 4 (Launch Agents).**
 
 # DERIVED PATHS
 
 - `[PROBLEM_DIR]` = directory containing the problem file
-- `[OUTPUT_FILE]` = `[PROBLEM_DIR]/research.md`
+- `[OUTPUT_FILE]` = argument value if provided, otherwise `[PROBLEM_DIR]/research.md`
 
 # TASK
 
@@ -395,14 +397,14 @@ Task tool:
 
 Store agent ID as `[PASTED_CONTENT_AGENT_ID]` (or null if not applicable).
 
-## Step 5: Collect Results and Create research.md
+## Step 5: Collect Results and Create Output File
 
 **Wait for all background agents to complete.** Use `TaskOutput` to collect results from each agent.
 
 **Create `[OUTPUT_FILE]` with the following structure:**
 
 ```markdown
-# Research Document
+# [DOCUMENT_TITLE]
 
 ## Problem Statement
 
