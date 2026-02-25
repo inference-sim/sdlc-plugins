@@ -183,6 +183,18 @@ AskUserQuestion:
 
 **Always show this screen.** Collect background sources with their paths/URLs.
 
+### Step 1.0: Detect Existing Background (silent)
+
+Check for existing background files that can be reused:
+
+```
+Glob: [CWD]/hypotheses/problem-context.md
+```
+
+Store:
+- `[HAS_PROBLEM_CONTEXT]` = true if file exists and is non-empty
+- `[PROBLEM_CONTEXT_PATH]` = path to the file (if found)
+
 ### Step 1.1: Select Source Types
 
 ```
@@ -192,6 +204,10 @@ AskUserQuestion:
       header: "Background"
       multiSelect: true
       options:
+        # NEW — only shown if [HAS_PROBLEM_CONTEXT] = true:
+        - label: "Use existing problem-context.md (Recommended)"
+          description: "Reuse background from a previous /hypothesis-test session"
+        # Existing options (always shown):
         - label: "Current repository (Recommended)"
           description: "Analyze the codebase in the current working directory"
         - label: "Other local repositories"
@@ -208,7 +224,10 @@ AskUserQuestion:
           description: "Start generating ideas without background context"
 ```
 
+**If [HAS_PROBLEM_CONTEXT] = false:** Omit the "Use existing problem-context.md" option. Screen looks identical to current behavior.
+
 **Store source type selections:**
+- `[USE_EXISTING_CONTEXT]` = true if "Use existing problem-context.md" selected
 - `[INCLUDE_CURRENT_REPO]` = true if "Current repository" selected
 - `[ADD_LOCAL_REPOS]` = true if "Other local repositories" selected
 - `[ADD_GITHUB_REPOS]` = true if "GitHub repositories" selected
@@ -479,6 +498,28 @@ TaskUpdate:
 - If `[APPEND_MODE]` = false (default): Create fresh research.md, overwriting any existing content
 
 **Conditional based on `[BACKGROUND_MODE]`:**
+
+### If `[USE_EXISTING_CONTEXT]` = true:
+
+Set `[BACKGROUND_MODE]` = "reuse"
+
+```
+Task tool:
+  description: "Create research doc from existing background"
+  subagent_type: general-purpose
+  run_in_background: true
+  prompt: |
+    1. Read the problem statement from [PROBLEM_FILE_PATH]
+    2. Read the existing background from [PROBLEM_CONTEXT_PATH]
+    3. Extract the "# Background" section and everything under it (up to the end of the file or next top-level heading that isn't under Background)
+    4. Create [RESEARCH_FILE] with:
+       - "# Research Document"
+       - "## Problem Statement" with the problem content
+       - "---"
+       - The extracted Background section
+       - "---"
+       - A trailing blank line (for subsequent idea appending)
+```
 
 ### If `[BACKGROUND_MODE]` = "skip":
 Create a minimal research document with just the problem statement:
