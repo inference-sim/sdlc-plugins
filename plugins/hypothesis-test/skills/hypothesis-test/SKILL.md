@@ -23,7 +23,7 @@ allowed-tools:
 
 # Hypothesis Test
 
-End-to-end guided hypothesis experimentation with a deterministic 7-screen flow and background agent dispatch.
+End-to-end guided hypothesis experimentation with a deterministic 6-screen flow and background agent dispatch.
 
 **CRITICAL:** This skill MUST present the same UI flow every time. The user experience must be predictable and consistent.
 
@@ -35,7 +35,7 @@ End-to-end guided hypothesis experimentation with a deterministic 7-screen flow 
 - Ask for confirmation or approval to continue
 - Add any commentary between screens
 
-The ONLY time the flow pauses is when an AskUserQuestion is presented. Between screens, the transition is instant and silent. Screen 1 answer → immediately run Step 0 + Screen 2 (Background). Screen 2 completes → immediately show Screen 3. And so on.
+The ONLY time the flow pauses is when an AskUserQuestion is presented. Between screens, the transition is instant and silent. Screen 1 answer → immediately run Step 0 + background processing + Screen 2 (Generation). And so on.
 
 ## Fixed Screen Sequence
 
@@ -43,42 +43,41 @@ Every invocation presents exactly these screens in this order:
 
 | Screen | Headers | Type | Purpose | Never Skip |
 |--------|---------|------|---------|------------|
-| 1 | "Project" + "Focus" + "Count" | Config (3 questions) | Setup: project, focus area, hypothesis count | Always show |
-| 2 | "Background" | Config | Background context: reuse existing or generate new | Always show |
-| 3 | — | Dashboard | Hypothesis generation progress | Always show |
-| 4 | "Select" + "Execution" | Config (2 questions) | Pick hypotheses to test + execution mode | Always show |
-| 5 | "Approve" | Dashboard + Config | Scaffold experiments (dashboard), then batch approve | Always show |
-| 6 | — | Dashboard | Experiment progress (background agents) | Always show |
-| 7 | "Commit" | Config | Commit results | Always show |
+| 1 | "Project" + "Focus" + "Count" + "Background" | Config (4 questions) | Setup: project, focus area, hypothesis count, background sources | Always show |
+| 2 | — | Dashboard | Hypothesis generation progress | Always show |
+| 3 | "Select" + "Execution" | Config (2 questions) | Pick hypotheses to test + execution mode | Always show |
+| 4 | "Approve" | Dashboard + Config | Scaffold experiments (dashboard), then batch approve | Always show |
+| 5 | — | Dashboard | Experiment progress (background agents) | Always show |
+| 6 | "Commit" | Config | Commit results | Always show |
 
-**Navigation:** Config screens (1, 4) use multi-question AskUserQuestion calls so the user can navigate left/right between questions before submitting.
+**Navigation:** Config screens (1, 3) use multi-question AskUserQuestion calls so the user can navigate left/right between questions before submitting.
 
 ## Rules
 
-1. **No conditional skipping** — All 7 screens shown regardless of detected state
+1. **No conditional skipping** — All 6 screens shown regardless of detected state
 2. **Same option order** — Options always in the same order within each screen
 3. **Defaults clearly marked** — Recommended options have "(Recommended)" suffix
 4. **Auto-detection informs, doesn't skip** — Detected state sets defaults, never skips screens
-5. **Dashboards are task-driven** — Screens 3, 5 (scaffolding phase), and 6 use TaskCreate/TaskUpdate for progress
-6. **One agent per hypothesis** — Every hypothesis scaffolding (Screen 5) and test (Screen 6) runs in its own background agent
+5. **Dashboards are task-driven** — Screens 2, 4 (scaffolding phase), and 5 use TaskCreate/TaskUpdate for progress
+6. **One agent per hypothesis** — Every hypothesis scaffolding (Screen 4) and test (Screen 5) runs in its own background agent
 7. **Orchestrator owns the catalog** — Only the orchestrator writes to `[PROJECT_ROOT]/hypotheses/README.md`. Background agents never touch it.
-8. **Approval before testing** — Experiment designs are scaffolded by background agents, then approved in bulk (Screen 5), before any testing agents launch (Screen 6). Testing agents never ask for approval.
+8. **Approval before testing** — Experiment designs are scaffolded by background agents, then approved in bulk (Screen 4), before any testing agents launch (Screen 5). Testing agents never ask for approval.
 9. **All paths relative to project** — All file operations (Glob, Grep, Read, Write) use `[PROJECT_ROOT]` as base. Never assume the current working directory is the target project.
 10. **Always invoke internal skills** — Never ask the user for permission before invoking internal skills. `_formulate-hypothesis`, `_scaffold-experiment`, `_run-and-analyze`, and `_document-findings` are always used automatically at their respective stages. No opt-in, no confirmation, no manual alternative.
-11. **Never pause during dashboards** — Screens 3, 5 (scaffolding phase), and 6 run to completion without any user interaction. Do NOT stop between iterations to show results, ask questions, or wait for feedback. Generate all hypotheses back-to-back, scaffold all experiments back-to-back, run all tests back-to-back. The user sees progress only through task updates.
-12. **Multi-question navigation** — Config screens (1, 4) use a single AskUserQuestion with multiple questions so users can navigate left/right between questions before submitting.
+11. **Never pause during dashboards** — Screens 2, 4 (scaffolding phase), and 5 run to completion without any user interaction. Do NOT stop between iterations to show results, ask questions, or wait for feedback. Generate all hypotheses back-to-back, scaffold all experiments back-to-back, run all tests back-to-back. The user sees progress only through task updates.
+12. **Multi-question navigation** — Config screens (1, 3) use a single AskUserQuestion with multiple questions so users can navigate left/right between questions before submitting.
 13. **Zero-talk transitions** — After a screen completes, immediately execute the next screen. No recaps, no summaries, no "let me now...", no asking permission to continue. The only user-facing output between screens is the next AskUserQuestion or task progress updates.
 
 ## Edge Cases
 
-### 0 hypotheses selected (Screen 4, "Select" question)
-If user deselects all: show "Please select at least one hypothesis." Re-show Screen 4.
+### 0 hypotheses selected (Screen 3, "Select" question)
+If user deselects all: show "Please select at least one hypothesis." Re-show Screen 3.
 
-### 0 experiments approved (Screen 5)
-If user deselects all designs: show "No experiments approved. Skipping to commit." Jump to Screen 7.
+### 0 experiments approved (Screen 4)
+If user deselects all designs: show "No experiments approved. Skipping to commit." Jump to Screen 6.
 
 ### All experiments fail
-Screen 6 dashboard shows all tasks as failed. Screen 7 summary includes failure count. Commit screen still shown.
+Screen 5 dashboard shows all tasks as failed. Screen 6 summary includes failure count. Commit screen still shown.
 
 ### Experiment timeout
 After 5 minutes + 3 retries, mark as `Failed` with reason "experiment timeout".
@@ -88,9 +87,24 @@ If the user-provided path doesn't exist or isn't a directory: show error, re-sho
 
 ---
 
+## Pre-Screen Detection (silent, before Screen 1)
+
+Before presenting Screen 1, silently check the current working directory for existing background files:
+
+```
+Glob("./research.md")
+Glob("./hypotheses/problem-context.md")
+```
+
+Store:
+- `[HAS_RESEARCH_MD]` = true if research.md exists and contains a `# Background` section
+- `[HAS_PROBLEM_CONTEXT]` = true if hypotheses/problem-context.md exists and is non-empty
+
+---
+
 ## Screen 1: Setup (SCREEN 1 — Always Show)
 
-Present all three config questions in a **single AskUserQuestion** so the user can navigate left/right between them:
+Present all four config questions in a **single AskUserQuestion** so the user can navigate left/right between them:
 
 ```
 AskUserQuestion:
@@ -125,7 +139,32 @@ AskUserQuestion:
           description: "Moderate depth — covers more ground"
         - label: "10"
           description: "Thorough exploration — takes longer to test all"
+    - question: "Select background sources for hypothesis generation:"
+      header: "Background"
+      multiSelect: true
+      options:
+        # Conditional — only if [HAS_RESEARCH_MD] = true:
+        - label: "Use existing research.md (Recommended)"
+          description: "Reuse background from a previous /research-ideas session"
+        # Conditional — only if [HAS_PROBLEM_CONTEXT] = true:
+        - label: "Use existing problem-context.md (Recommended)"
+          description: "Reuse background from a previous /hypothesis-test session"
+        # Always shown:
+        - label: "Current repository"
+          description: "Analyze the codebase for relevant context"
+        - label: "Other local repositories"
+          description: "Include related code from other local directories"
+        - label: "GitHub repositories"
+          description: "Include remote GitHub repos (fetched via API)"
+        - label: "Remote papers or URLs"
+          description: "Include arXiv papers, docs, blog posts, or web content"
+        - label: "Web search"
+          description: "Search the web for relevant papers and resources"
+        - label: "Skip background"
+          description: "Generate hypotheses without background context"
 ```
+
+**If neither [HAS_RESEARCH_MD] nor [HAS_PROBLEM_CONTEXT] is true:** Omit the reuse options from the Background question. Only source types and "Skip" are shown.
 
 **After submission:**
 
@@ -134,8 +173,9 @@ AskUserQuestion:
 3. Store project as `[PROJECT_ROOT]` (absolute path, no trailing slash).
 4. If "Specific component" or "Other" selected for Focus and user provided text: store that as `[FOCUS_AREA]`. Otherwise store the selected label.
 5. Store count as `[COUNT]`.
+6. Store background selections as `[BACKGROUND_SELECTIONS]`.
 
-**→ Immediately proceed to Step 0 + Screen 2 (Background). No commentary.**
+**→ Immediately proceed to Step 0 + background processing + Screen 2 (Generation). No commentary.**
 
 ---
 
@@ -157,65 +197,16 @@ Store:
 - `[EXISTING_CLAIMS]` — claims from existing hypotheses (to avoid duplicates)
 - `[PENDING_HYPOTHESES]` — any with Status: Pending from previous runs
 
-**Also detect existing background files:**
+### Process Background Selections
 
-```
-Glob("[PROJECT_ROOT]/research.md")
-Glob("[PROJECT_ROOT]/hypotheses/problem-context.md")
-```
+Based on `[BACKGROUND_SELECTIONS]` from Screen 1:
 
-Store:
-- `[HAS_RESEARCH_MD]` = true if research.md exists and contains a `# Background` section
-- `[HAS_PROBLEM_CONTEXT]` = true if hypotheses/problem-context.md exists and is non-empty
-- `[RESEARCH_MD_PATH]` = `[PROJECT_ROOT]/research.md` (if found)
-- `[PROBLEM_CONTEXT_PATH]` = `[PROJECT_ROOT]/hypotheses/problem-context.md` (if found)
-
----
-
-## Screen 2: Background (SCREEN 2 — Always Show)
-
-**This is a single screen.** Present one multi-select AskUserQuestion combining reuse options and source types. The `_summarize-problem-context` skill handles any path/URL collection internally.
-
-Background detection from Step 0 determines which reuse options appear:
-
-```
-AskUserQuestion:
-  questions:
-    - question: "Select background sources for hypothesis generation (select multiple, or skip):"
-      header: "Background"
-      multiSelect: true
-      options:
-        # Conditional — only if [HAS_RESEARCH_MD] = true:
-        - label: "Use existing research.md (Recommended)"
-          description: "Reuse background from a previous /research-ideas session"
-        # Conditional — only if [HAS_PROBLEM_CONTEXT] = true:
-        - label: "Use existing problem-context.md (Recommended)"
-          description: "Reuse background from a previous /hypothesis-test session"
-        # Always shown:
-        - label: "Current repository"
-          description: "Analyze the codebase at [PROJECT_ROOT]"
-        - label: "Other local repositories"
-          description: "Include related code from other local directories"
-        - label: "GitHub repositories"
-          description: "Include remote GitHub repos (fetched via API)"
-        - label: "Remote papers or URLs"
-          description: "Include arXiv papers, docs, blog posts, or web content"
-        - label: "Web search"
-          description: "Search the web for relevant papers and resources"
-        - label: "Skip background"
-          description: "Generate hypotheses without background context"
-```
-
-**If neither [HAS_RESEARCH_MD] nor [HAS_PROBLEM_CONTEXT] is true:** Omit the reuse options. Only source types and "Skip" are shown.
-
-**If "Skip background" is selected (alone or with others):** Treat as skip — set `[BACKGROUND_CONTENT]` = empty.
-
-### Processing selections:
+**If "Skip background" is selected (alone or with others):** Set `[BACKGROUND_CONTENT]` = empty.
 
 **If a reuse option is selected:**
 
-1. If "Use existing research.md": Read `[RESEARCH_MD_PATH]`, extract the `# Background` section (everything from `# Background` to the next `---` or `# Idea`), write to `[PROJECT_ROOT]/hypotheses/problem-context.md`, store as `[BACKGROUND_CONTENT]`
-2. If "Use existing problem-context.md": Read `[PROBLEM_CONTEXT_PATH]`, store as `[BACKGROUND_CONTENT]`
+1. If "Use existing research.md": Read `[PROJECT_ROOT]/research.md`, extract the `# Background` section (everything from `# Background` to the next `---` or `# Idea`), write to `[PROJECT_ROOT]/hypotheses/problem-context.md`, store as `[BACKGROUND_CONTENT]`
+2. If "Use existing problem-context.md": Read `[PROJECT_ROOT]/hypotheses/problem-context.md`, store as `[BACKGROUND_CONTENT]`
 3. If a reuse option is selected alongside source types, the reuse content is used as-is — ignore other source selections.
 
 **If only source types selected (no reuse, no skip):**
@@ -249,11 +240,9 @@ Task tool:
 
 Wait for completion. Read the file and store as `[BACKGROUND_CONTENT]`.
 
-**→ Immediately proceed to Screen 3 (Generation Dashboard). No commentary.**
-
 ---
 
-## Screen 3: Generation Dashboard (SCREEN 3 — Always Show)
+## Screen 2: Generation Dashboard (SCREEN 2 — Always Show)
 
 **CRITICAL: This entire screen is fully autonomous. Do NOT pause, ask questions, show intermediate results, or wait for user input. Generate ALL [COUNT] hypotheses in parallel using background agents. The user sees progress only via task updates — never stop to discuss, confirm, or display individual results.**
 
@@ -358,11 +347,11 @@ Collect results using `TaskOutput`. As each agent completes:
    ```
 4. Store generated hypotheses as `[NEW_HYPOTHESES]`
 
-**→ Immediately proceed to Screen 4. No commentary, no recap of generated hypotheses.**
+**→ Immediately proceed to Screen 3. No commentary, no recap of generated hypotheses.**
 
 ---
 
-## Screen 4: Select & Execute (SCREEN 4 — Always Show)
+## Screen 3: Select & Execute (SCREEN 3 — Always Show)
 
 Combine `[NEW_HYPOTHESES]` with `[PENDING_HYPOTHESES]` from Step 0.
 
@@ -394,15 +383,15 @@ AskUserQuestion:
 
 If no previously pending hypotheses exist, omit the "(pending)" entries but still show the screen with just the new ones.
 
-If user selects nothing for "Select": show "Please select at least one hypothesis." Re-show Screen 4.
+If user selects nothing for "Select": show "Please select at least one hypothesis." Re-show Screen 3.
 
 Store selections as `[SELECTED]` and execution mode as `[EXEC_MODE]`.
 
-**→ Immediately proceed to Screen 5 scaffolding. No commentary.**
+**→ Immediately proceed to Screen 4 scaffolding. No commentary.**
 
 ---
 
-## Screen 5: Approve Experiment Designs (SCREEN 5 — Always Show)
+## Screen 4: Approve Experiment Designs (SCREEN 4 — Always Show)
 
 ### Phase 1: Scaffolding Dashboard
 
@@ -488,15 +477,15 @@ AskUserQuestion:
     - ...
 ```
 
-If user approves nothing: show "No experiments approved. Skipping to commit." Jump to Screen 7.
+If user approves nothing: show "No experiments approved. Skipping to commit." Jump to Screen 6.
 
 Store approved hypotheses as `[APPROVED]`.
 
-**→ Immediately proceed to Screen 6 testing. No commentary.**
+**→ Immediately proceed to Screen 5 testing. No commentary.**
 
 ---
 
-## Screen 6: Testing Dashboard (SCREEN 6 — Always Show)
+## Screen 5: Testing Dashboard (SCREEN 5 — Always Show)
 
 **Create one task per approved hypothesis:**
 
@@ -507,7 +496,7 @@ For each hypothesis in [APPROVED]:
 TaskCreate: "Update hypothesis catalog"  (activeForm: "Updating catalog")
 ```
 
-**Each hypothesis runs in its own background agent.** Since scaffolding and approval already happened in Screen 5, agents only run experiments and document results.
+**Each hypothesis runs in its own background agent.** Since scaffolding and approval already happened in Screen 4, agents only run experiments and document results.
 
 ### Background Agent Prompt Template
 
@@ -596,11 +585,11 @@ TaskOutput(block: true):       wait for H2 → parse verdict, update task
 
 Store all verdicts as `[RESULTS]`.
 
-**→ Immediately proceed to Screen 7. No commentary, no recap of results.**
+**→ Immediately proceed to Screen 6. No commentary, no recap of results.**
 
 ---
 
-## Screen 7: Commit (SCREEN 7 — Always Show)
+## Screen 6: Commit (SCREEN 6 — Always Show)
 
 ```
 AskUserQuestion:
