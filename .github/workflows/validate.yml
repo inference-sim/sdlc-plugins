@@ -73,6 +73,35 @@ jobs:
             echo "✓ $skill_file has valid frontmatter"
           done
 
+      - name: Validate internal skill references
+        run: |
+          echo "Checking that Skill() references in allowed-tools point to existing skills..."
+
+          find plugins -name "SKILL.md" | while read skill_file; do
+            plugin_dir=$(echo "$skill_file" | cut -d'/' -f1-2)
+
+            # Extract Skill() references from allowed-tools
+            grep -oP 'Skill\(\K[^)]+' "$skill_file" 2>/dev/null | while read ref; do
+              # Get skill name (first word, strip wildcards)
+              skill_name=$(echo "$ref" | awk '{print $1}' | sed 's/ \*$//')
+
+              # Check if the referenced skill directory exists
+              if [ ! -d "$plugin_dir/skills/$skill_name" ]; then
+                echo "ERROR: $skill_file references Skill($skill_name) but $plugin_dir/skills/$skill_name/ does not exist"
+                exit 1
+              fi
+
+              if [ ! -f "$plugin_dir/skills/$skill_name/SKILL.md" ]; then
+                echo "ERROR: $skill_file references Skill($skill_name) but $plugin_dir/skills/$skill_name/SKILL.md does not exist"
+                exit 1
+              fi
+
+              echo "  ✓ $skill_file → Skill($skill_name) exists"
+            done
+          done
+
+          echo "✓ All internal skill references are valid"
+
       - name: Check version consistency
         run: |
           echo "Checking version consistency between marketplace.json and plugin.json..."

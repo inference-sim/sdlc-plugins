@@ -1,0 +1,8 @@
+{
+  "name": "hypothesis-test",
+  "description": "Guided hypothesis-driven experimentation with auto-analysis",
+  "version": "0.1.0",
+  "author": {
+    "name": "BLIS team"
+  }
+}
