@@ -45,7 +45,9 @@ Move from `plugins/research-ideas/skills/` to `plugins/shared-skills/skills/`.
 
 No other changes to the skill logic — source gathering, parallel agents, and synthesis all stay the same.
 
-### 3. hypothesis-test Flow: 6-screen → 7-screen
+### 3. hypothesis-test Flow: Add Background to Screen 1
+
+> **Implementation note:** During implementation, the dedicated Screen 2 (Background) was consolidated into Screen 1 as a 4th question to streamline the user experience and maintain the existing 6-screen flow. The design below describes the original 7-screen plan; see the actual SKILL.md for the implemented 6-screen version.
 
 Insert new **Screen 2: Background** after Setup, shift all subsequent screens.
 
@@ -103,7 +105,7 @@ BACKGROUND_CONTEXT: |
 
 With instruction: "Use the following background context to inform your hypothesis generation. This provides domain knowledge and project understanding beyond what you find by scanning files."
 
-The `_formulate-hypothesis` skill gets a new optional argument `[BACKGROUND_CONTEXT]` used alongside its project scanning.
+The `_formulate-hypothesis` skill reads background context directly from `[PROJECT_ROOT]/hypotheses/problem-context.md` during its scan step, rather than receiving it as an argument. This simplifies the agent invocation — the parent skill only needs to ensure the file exists before launching agents.
 
 #### Output
 

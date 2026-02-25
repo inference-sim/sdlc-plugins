@@ -31,7 +31,6 @@ End-to-end guided hypothesis experimentation with a deterministic 6-screen flow 
 
 - **Background context** — domain knowledge and architectural information used to generate hypotheses
 - **Problem context file** — the file at `[PROJECT_ROOT]/hypotheses/problem-context.md` that stores background context
-- **Background sources** — user-selected source types (repos, papers, web search) used to generate the problem context file
 
 **CRITICAL: NEVER STOP BETWEEN SCREENS.** After the user answers a config screen, immediately proceed to the next screen. Do NOT:
 - Summarize what the user just selected
@@ -45,7 +44,7 @@ The ONLY time the flow pauses is when an AskUserQuestion is presented. Between s
 
 ## Fixed Screen Sequence
 
-<!-- If screen count changes, update the count in the heading above Screen sequence table AND in the intro line. -->
+<!-- If screen count changes, update the count in the first paragraph (intro line ~25) AND in Rule #1 below. -->
 
 Every invocation presents exactly these screens in this order:
 
@@ -119,8 +118,10 @@ Glob("./hypotheses/problem-context.md")
 ```
 
 Store:
-- `[HAS_RESEARCH_MD]` = true if research.md exists and contains a `# Background` section
-- `[HAS_PROBLEM_CONTEXT]` = true if hypotheses/problem-context.md exists and is non-empty
+- `[HAS_RESEARCH_MD]` = true if research.md exists, is readable, and contains a `# Background` section (Read the file to verify; if Read fails, set to false)
+- `[HAS_PROBLEM_CONTEXT]` = true if hypotheses/problem-context.md exists, is readable, and is non-empty (Read the file to verify; if Read fails, set to false)
+
+Never offer a reuse option for a file that failed Read validation.
 
 ---
 
@@ -182,7 +183,7 @@ AskUserQuestion:
           description: "Include arXiv papers, docs, blog posts, or web content"
         - label: "Web search"
           description: "Search the web for relevant papers and resources"
-        - label: "Skip background"
+        - label: "Skip background entirely"
           description: "Generate hypotheses without background context"
 ```
 
@@ -223,12 +224,17 @@ Store:
 
 Based on `[BACKGROUND_SELECTIONS]` from Screen 1:
 
-**If "Skip background" is selected (alone or with others):** No action needed. Agents will skip background if the file doesn't exist.
+**If "Skip background entirely" is selected (alone or with others):** No action needed. Agents will skip background if the file doesn't exist.
 
 **If a reuse option is selected:**
 
-1. If "Use existing research.md": Read `[PROJECT_ROOT]/research.md`, extract the `# Background` section (everything from `# Background` to the next `---` or `# Idea`), write to `[PROJECT_ROOT]/hypotheses/problem-context.md`
-2. If "Use existing problem-context.md": No action needed — file already exists at `[PROJECT_ROOT]/hypotheses/problem-context.md`
+1. If "Use existing research.md":
+   - Read `[PROJECT_ROOT]/research.md`. If Read fails: show error "Failed to read research.md", re-show Screen 1.
+   - Extract the `# Background` section (everything from `# Background` to the next `---` or `# Idea`). If no `# Background` section found: show error "research.md has no Background section", re-show Screen 1.
+   - Ensure directory exists: `Bash("mkdir -p '[PROJECT_ROOT]/hypotheses'")`
+   - Write extracted content to `[PROJECT_ROOT]/hypotheses/problem-context.md`. If Write fails: show error, re-show Screen 1.
+2. If "Use existing problem-context.md":
+   - Verify `[PROJECT_ROOT]/hypotheses/problem-context.md` is readable and non-empty. If not: show error "problem-context.md is missing or empty", re-show Screen 1.
 3. If a reuse option is selected alongside source types, the reuse content is used as-is — ignore other source selections.
 
 **If only source types selected (no reuse, no skip):**
@@ -260,7 +266,9 @@ Task tool:
     Write the output to [PROJECT_ROOT]/hypotheses/problem-context.md
 ```
 
-Wait for completion. The file is now at `[PROJECT_ROOT]/hypotheses/problem-context.md` for agents to read.
+Wait for completion using `TaskOutput`. Check the agent's result:
+- If the agent failed or timed out: log a warning "Background generation failed: [error from TaskOutput]" and proceed without background context. Do not fail the flow.
+- If the agent succeeded: verify `[PROJECT_ROOT]/hypotheses/problem-context.md` exists and is non-empty using `Glob` + `Read`. If the file is missing or empty: log a warning "Background file not created" and proceed without background context.
 
 ---
 
@@ -308,8 +316,10 @@ Task:
 ```
 
 Collect results using `TaskOutput`. As each agent completes:
-1. Parse `HYPOTHESIS` and `REFUTED_IF` from the agent's output
-2. Update the corresponding dashboard task → `completed`
+1. Check task status: if the agent failed or timed out, mark the dashboard task as `Failed` with reason from TaskOutput and continue.
+2. Validate output format: check that the output contains both a `HYPOTHESIS:` line and a `REFUTED_IF:` line. If either is missing, mark as `Failed` with reason "invalid output format" and continue.
+3. Parse `HYPOTHESIS` and `REFUTED_IF` from the agent's output.
+4. Update the corresponding dashboard task → `completed`.
 
 **After ALL agents complete:**
 

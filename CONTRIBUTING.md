@@ -49,7 +49,7 @@ This script:
 1. Disables any marketplace-installed sdlc-plugins in `~/.claude/settings.json`
 2. Loads all local plugins from `plugins/` via `--plugin-dir`
 3. Launches Claude Code
-4. Restores your marketplace plugins on exit (including on errors)
+4. Restores your marketplace plugins on exit (normal exit, error, or interrupt)
 
 Extra arguments are forwarded to `claude`:
 

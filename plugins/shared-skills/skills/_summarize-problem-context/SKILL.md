@@ -399,7 +399,9 @@ Store agent ID as `[PASTED_CONTENT_AGENT_ID]` (or null if not applicable).
 
 ## Step 5: Collect Results and Create Output File
 
-**Wait for all background agents to complete.** Use `TaskOutput` to collect results from each agent.
+**Wait for all background agents to complete.** Use `TaskOutput` to collect results from each agent. If an agent failed, log a warning noting which source failed and continue with results from successful agents.
+
+**Before writing:** Ensure the output directory exists: `Bash("mkdir -p \"$(dirname '[OUTPUT_FILE]')\"")`
 
 **Create `[OUTPUT_FILE]` with the following structure:**
 

@@ -33,11 +33,8 @@ Arguments:
    - Identify recently changed behavior from source
 1b. **Load background context** from `[PROJECT_ROOT]/hypotheses/problem-context.md`:
     - `Glob("[PROJECT_ROOT]/hypotheses/problem-context.md")` — if the file exists, `Read` it
-    - If the file is empty or unreadable, skip this step and rely on project scanning alone
-    - Use it for domain knowledge, architectural patterns, and known issues
-    - Identify more targeted testable gaps based on background insights
-    - Cross-reference background claims with what the project actually implements
-    - If the file does not exist, skip this step and rely on project scanning alone
+    - If the file does not exist, is empty, or Read fails: skip this step and rely on project scanning alone
+    - If loaded successfully: use it for domain knowledge, architectural patterns, and known issues. Identify more targeted testable gaps based on background insights and cross-reference background claims with what the project actually implements.
 2. **Identify a testable gap**:
    - Performance claims with no benchmark
    - Edge cases in core logic (boundary values, empty inputs, error paths)

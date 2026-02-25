@@ -192,8 +192,7 @@ Glob: [CWD]/hypotheses/problem-context.md
 ```
 
 Store:
-- `[HAS_PROBLEM_CONTEXT]` = true if file exists and is non-empty
-- `[PROBLEM_CONTEXT_PATH]` = path to the file (if found)
+- `[PROBLEM_CONTEXT_PATH]` = path to the file if it exists, is readable, and is non-empty (Read the file to verify); empty string otherwise
 
 ### Step 1.1: Select Source Types
 
@@ -204,7 +203,7 @@ AskUserQuestion:
       header: "Background"
       multiSelect: true
       options:
-        # NEW — only shown if [HAS_PROBLEM_CONTEXT] = true:
+        # NEW — only shown if [PROBLEM_CONTEXT_PATH] is non-empty:
         - label: "Use existing problem-context.md (Recommended)"
           description: "Reuse background from a previous /hypothesis-test session"
         # Existing options (always shown):
@@ -224,7 +223,7 @@ AskUserQuestion:
           description: "Start generating ideas without background context"
 ```
 
-**If [HAS_PROBLEM_CONTEXT] = false:** Omit the "Use existing problem-context.md" option. Screen looks identical to current behavior.
+**If `[PROBLEM_CONTEXT_PATH]` is empty:** Omit the "Use existing problem-context.md" option. Screen looks identical to current behavior.
 
 **Store source type selections:**
 - `[USE_EXISTING_CONTEXT]` = true if "Use existing problem-context.md" selected
