@@ -62,3 +62,4 @@ jobs:
           echo ""
           echo "Or reinstall specific plugins:"
           echo "  /plugin install research-ideas@sdlc-plugins"
+          echo "  /plugin install hypothesis-test@sdlc-plugins"

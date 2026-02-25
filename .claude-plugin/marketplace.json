@@ -15,6 +15,12 @@
       "source": "./plugins/research-ideas",
       "description": "Generate iteratively-reviewed research ideas with multi-model feedback",
       "version": "1.2.3"
+    },
+    {
+      "name": "hypothesis-test",
+      "source": "./plugins/hypothesis-test",
+      "description": "Guided hypothesis-driven experimentation with auto-analysis",
+      "version": "0.1.0"
     }
   ]
 }

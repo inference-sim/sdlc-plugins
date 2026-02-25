@@ -1,0 +1,13 @@
+# Hypothesis experiment outputs (generated per-project, not checked in)
+hypotheses/
+
+# Planning docs (local working documents)
+docs/plans/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS
+.DS_Store

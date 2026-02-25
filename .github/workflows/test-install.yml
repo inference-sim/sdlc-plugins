@@ -65,6 +65,55 @@ jobs:
           print("\n✓ All SKILL.md files are valid")
           EOF
 
+  test-hypothesis-test-screens:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate hypothesis-test 6-screen flow
+        run: |
+          skill="plugins/hypothesis-test/skills/hypothesis-test/SKILL.md"
+          echo "Checking hypothesis-test orchestrator has all 6 screens..."
+
+          for screen in \
+            "## Screen 1:" \
+            "## Step 0:" \
+            "## Screen 2:" \
+            "## Screen 3:" \
+            "## Screen 4:" \
+            "## Screen 5:" \
+            "## Screen 6:"; do
+            if ! grep -q "$screen" "$skill"; then
+              echo "ERROR: Missing '$screen' section in $skill"
+              exit 1
+            fi
+            echo "  ✓ Found $screen"
+          done
+
+          echo ""
+          echo "Checking all 4 internal skills exist..."
+          for internal_skill in _formulate-hypothesis _scaffold-experiment _run-and-analyze _document-findings; do
+            skill_path="plugins/hypothesis-test/skills/$internal_skill/SKILL.md"
+            if [ ! -f "$skill_path" ]; then
+              echo "ERROR: Missing internal skill $skill_path"
+              exit 1
+            fi
+            echo "  ✓ $internal_skill"
+          done
+
+          echo ""
+          echo "Checking background agent patterns in Screen 2, 4, 5..."
+          for screen_label in "Screen 2" "Screen 4" "Screen 5"; do
+            if ! grep -A 30 "## $screen_label:" "$skill" | grep -q "run_in_background"; then
+              echo "ERROR: $screen_label should use background agents (run_in_background) but pattern not found"
+              exit 1
+            fi
+            echo "  ✓ $screen_label uses background agents"
+          done
+
+          echo ""
+          echo "✓ hypothesis-test orchestrator is valid"
+
   test-plugin-structure:
     runs-on: ubuntu-latest
     steps:

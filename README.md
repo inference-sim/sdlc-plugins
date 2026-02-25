@@ -4,10 +4,15 @@ Private Claude Code plugins for the AI Platform Optimization team.
 
 ## Setup
 
+Adding the marketplace registers this repo as a plugin source. Plugins are then installed individually — install whichever ones you need.
+
 ```bash
-# Add marketplace (one-time)
+# 1. Add marketplace (one-time)
 /plugin marketplace add https://github.com/inference-sim/sdlc-plugins
+
+# 2. Install plugins (pick what you need)
 /plugin install research-ideas@sdlc-plugins
+/plugin install hypothesis-test@sdlc-plugins
 ```
 
 ## Auto-Updates
@@ -17,14 +22,16 @@ To enable automatic plugin updates when new versions are released, go to `/plugi
 ## Manual Install / Update / Remove
 
 ```bash
-# Install a plugin
+# Install individual plugins
 /plugin install research-ideas@sdlc-plugins
+/plugin install hypothesis-test@sdlc-plugins
 
-# Update to latest versions
+# Update all installed plugins to latest versions
 /plugin marketplace update sdlc-plugins
 
 # Remove a plugin
 /plugin uninstall research-ideas@sdlc-plugins
+/plugin uninstall hypothesis-test@sdlc-plugins
 ```
 
 ## Available skills
@@ -67,6 +74,31 @@ Create a `problem.md` file in your project directory. Some questions you can con
 ```
 
 This will help you explore and refine your problem statement before generating research ideas.
+
+### hypothesis-test
+
+Guided hypothesis-driven experimentation with auto-analysis.
+
+```bash
+/hypothesis-test
+```
+
+**Features:**
+- **6-screen guided flow** - project setup, hypothesis generation, selection, experiment design, testing, commit
+- **Parallel hypothesis generation** - background agents generate all hypotheses simultaneously
+- **Parallel experiment scaffolding & testing** - each hypothesis gets its own background agent
+- **Batch approval** - review all experiment designs at once before any tests run
+- **Auto-analysis** - experiments run, analyze results, and determine verdicts automatically
+
+Just run the command and it will:
+1. Ask you to pick a project, focus area, and hypothesis count
+2. Generate hypotheses in parallel (background agents scan the project for untested behaviors)
+3. Let you select which hypotheses to test and execution mode (parallel/sequential)
+4. Scaffold experiments, present designs for batch approval
+5. Run approved experiments and document findings with verdicts (Confirmed/Refuted/Inconclusive/Failed)
+6. Optionally commit all results to git
+
+Outputs per-hypothesis directories under `hypotheses/` with `HYPOTHESIS.md`, `run.sh`, `analyze.py`, and `FINDINGS.md`, plus a `hypotheses/README.md` catalog.
 
 ## Authentication
 
