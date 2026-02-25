@@ -37,6 +37,29 @@ Add to `.claude-plugin/marketplace.json`:
 }
 ```
 
+## Local Development
+
+Use `scripts/dev.sh` to launch Claude Code with your local plugin versions instead of the marketplace-installed ones:
+
+```bash
+./scripts/dev.sh
+```
+
+This script:
+1. Disables any marketplace-installed sdlc-plugins in `~/.claude/settings.json`
+2. Loads all local plugins from `plugins/` via `--plugin-dir`
+3. Launches Claude Code
+4. Restores your marketplace plugins on exit (normal exit, error, or interrupt)
+
+Extra arguments are forwarded to `claude`:
+
+```bash
+./scripts/dev.sh --verbose
+./scripts/dev.sh -p "test my skill"
+```
+
+**Requirements:** `python3`, Claude CLI
+
 ## Local Testing
 
 ```bash
@@ -107,6 +130,7 @@ sdlc-plugins/
 │               └── SKILL.md
 ├── scripts/
 │   ├── bump-version.sh
+│   ├── dev.sh
 │   ├── test-local.sh
 │   └── test-install-local.sh
 ├── CLAUDE.md

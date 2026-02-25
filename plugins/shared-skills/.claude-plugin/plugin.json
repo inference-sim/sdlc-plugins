@@ -1,0 +1,8 @@
+{
+  "name": "shared-skills",
+  "description": "Internal shared skills used by other plugins",
+  "version": "0.1.0",
+  "author": {
+    "name": "BLIS team"
+  }
+}

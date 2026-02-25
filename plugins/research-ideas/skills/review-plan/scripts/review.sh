@@ -228,43 +228,32 @@ API_ENDPOINT="${API_BASE_URL}${API_PATH}"
 if [ "$KEY_SOURCE" = "ANTHROPIC_AUTH_TOKEN (fallback)" ]; then
     # Check if pointing directly to Anthropic's API (not a proxy)
     if [[ "$API_BASE_URL" == *"api.anthropic.com"* ]]; then
-        echo ""
-        echo "═══════════════════════════════════════════════════════════"
-        echo "  ⚠️  CONFIGURATION ISSUE DETECTED"
-        echo "═══════════════════════════════════════════════════════════"
-        echo ""
-        echo "  You have ANTHROPIC_AUTH_TOKEN set with ANTHROPIC_BASE_URL"
-        echo "  pointing to api.anthropic.com, but this skill requires an"
-        echo "  OpenAI-compatible endpoint (like a LiteLLM proxy)."
-        echo ""
-        echo "  Anthropic's native API uses a different format than OpenAI,"
-        echo "  so direct calls to api.anthropic.com will fail."
-        echo ""
-        echo "  ╔════════════════════════════════════════════════════════╗"
-        echo "  ║  HOW TO FIX                                            ║"
-        echo "  ╚════════════════════════════════════════════════════════╝"
-        echo ""
-        echo "  Option 1: Use a LiteLLM proxy (recommended)"
-        echo "  ────────────────────────────────────────────"
-        echo "  Point ANTHROPIC_BASE_URL to your LiteLLM proxy:"
-        echo ""
-        echo "    export ANTHROPIC_AUTH_TOKEN='your-key'"
-        echo "    export ANTHROPIC_BASE_URL='http://localhost:4000'  # your LiteLLM proxy"
-        echo ""
-        echo "  Option 2: Use OpenAI credentials instead"
-        echo "  ────────────────────────────────────────────"
-        echo "  Set OpenAI env vars (takes priority over Anthropic):"
-        echo ""
-        echo "    export OPENAI_API_KEY='your-key'"
-        echo "    export OPENAI_BASE_URL='https://api.openai.com'  # or your proxy"
-        echo ""
-        echo "  Option 3: Use an OpenAI-compatible proxy for Anthropic"
-        echo "  ────────────────────────────────────────────"
-        echo "  Some providers offer OpenAI-compatible endpoints for Claude."
-        echo "  Check your provider's docs for the /v1/chat/completions endpoint."
-        echo ""
-        echo "═══════════════════════════════════════════════════════════"
-        echo ""
+        README_PATH="$SCRIPT_DIR/../README.md"
+        cat <<'ERRMSG'
+
+═══════════════════════════════════════════════════════════
+  ⚠️  CONFIGURATION ISSUE DETECTED
+═══════════════════════════════════════════════════════════
+
+  ANTHROPIC_BASE_URL points to api.anthropic.com, but this
+  skill requires an OpenAI-compatible endpoint (/v1/chat/completions).
+
+  Quick fix:
+    export ANTHROPIC_BASE_URL='http://localhost:4000'  # LiteLLM proxy
+    # or use OpenAI credentials instead:
+    export OPENAI_API_KEY='your-key'
+
+ERRMSG
+        if [ -f "$README_PATH" ]; then
+            echo "  See $README_PATH for full troubleshooting details."
+        else
+            echo "  See review-plan README.md for full troubleshooting details."
+        fi
+        cat <<'ERRMSG'
+
+═══════════════════════════════════════════════════════════
+
+ERRMSG
         exit 1
     fi
 
@@ -571,11 +560,29 @@ echo "[5/6] Sending to $MODEL for review..."
 # Build request using helper script
 REQUEST_JSON=$(python3 "$SCRIPT_DIR/build_request.py" "$REDACTED_PLAN" "$MODEL")
 
-# Make API call
+# Make API call (5-minute timeout for LLM response)
+CURL_EXIT=0
 RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$API_ENDPOINT" \
+    --connect-timeout 30 \
+    --max-time 300 \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $API_KEY" \
-    -d "$REQUEST_JSON")
+    -d "$REQUEST_JSON" 2>&1) || CURL_EXIT=$?
+
+if [ $CURL_EXIT -ne 0 ]; then
+    echo ""
+    echo "ERROR: API request failed (curl exit code $CURL_EXIT)"
+    if [ $CURL_EXIT -eq 28 ]; then
+        echo "  Request timed out after 5 minutes."
+        echo "  The model may be overloaded or the plan too large."
+        echo "  Try a faster model: GCP/gemini-2.5-flash"
+    else
+        echo "  Connection error. Check your endpoint URL and network."
+        echo "  Endpoint: $API_ENDPOINT"
+    fi
+    echo ""
+    exit 1
+fi
 
 # Extract HTTP status code
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
@@ -607,43 +614,41 @@ if [ "$HTTP_CODE" -ne 200 ]; then
             fi
             ;;
         404)
-            echo "This usually means the model name is invalid or endpoint URL is wrong."
-            echo "Check model: $MODEL"
-            echo "Check endpoint: $API_ENDPOINT"
-            echo ""
-            # Check for common misconfigurations
+            ERROR_MSG=$(echo "$RESPONSE_BODY" | jq -r '.error.message // .message // empty' 2>/dev/null)
+            echo "Model name invalid or endpoint URL wrong."
+            echo "  Model: $MODEL"
+            echo "  Endpoint: $API_ENDPOINT"
+            if [ -n "$ERROR_MSG" ]; then
+                echo "  API error: $ERROR_MSG"
+            fi
             if [[ "$API_ENDPOINT" == *"api.anthropic.com"* ]]; then
-                echo "═══════════════════════════════════════════════════════════"
-                echo "  LIKELY ISSUE: api.anthropic.com doesn't support /v1/chat/completions"
-                echo "═══════════════════════════════════════════════════════════"
-                echo ""
-                echo "  Anthropic's native API uses /v1/messages, not /v1/chat/completions."
-                echo "  This skill requires an OpenAI-compatible endpoint."
-                echo ""
-                echo "  FIX: Point ANTHROPIC_BASE_URL to a LiteLLM proxy or"
-                echo "       OpenAI-compatible service, NOT api.anthropic.com."
-                echo ""
-                echo "  Example:"
+                echo "  → api.anthropic.com doesn't support /v1/chat/completions."
                 echo "    export ANTHROPIC_BASE_URL='http://localhost:4000'  # LiteLLM proxy"
-                echo ""
             else
-                echo "Available LiteLLM models:"
-                echo "  Azure/gpt-4o, GCP/gemini-2.5-flash, aws/claude-opus-4-6"
+                echo "  Available models: Azure/gpt-4o, GCP/gemini-2.5-flash, aws/claude-opus-4-6"
+            fi
+            README_PATH="$SCRIPT_DIR/../README.md"
+            if [ -f "$README_PATH" ]; then
+                echo "  See $README_PATH for full troubleshooting."
+            else
+                echo "  See review-plan README.md for full troubleshooting."
             fi
             ;;
         400)
+            ERROR_MSG=$(echo "$RESPONSE_BODY" | jq -r '.error.message // .message // empty' 2>/dev/null)
             echo "Bad request - the API rejected the request format."
-            echo ""
+            if [ -n "$ERROR_MSG" ]; then
+                echo "  API error: $ERROR_MSG"
+            fi
             if [[ "$API_ENDPOINT" == *"anthropic.com"* ]]; then
-                echo "═══════════════════════════════════════════════════════════"
-                echo "  LIKELY ISSUE: Wrong API format for Anthropic"
-                echo "═══════════════════════════════════════════════════════════"
-                echo ""
-                echo "  This skill uses OpenAI-compatible request format."
-                echo "  Anthropic's native API requires a different format."
-                echo ""
-                echo "  FIX: Use a LiteLLM proxy instead of api.anthropic.com"
-                echo ""
+                echo "  → Wrong API format for Anthropic. Use a LiteLLM proxy instead:"
+                echo "    export ANTHROPIC_BASE_URL='http://localhost:4000'"
+            fi
+            README_PATH="$SCRIPT_DIR/../README.md"
+            if [ -f "$README_PATH" ]; then
+                echo "  See $README_PATH for full troubleshooting."
+            else
+                echo "  See review-plan README.md for full troubleshooting."
             fi
             ;;
         429)

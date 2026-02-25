@@ -76,8 +76,9 @@ jobs:
           echo "Checking hypothesis-test orchestrator has all 6 screens..."
 
           for screen in \
+            "## Pre-Screen Detection" \
             "## Screen 1:" \
-            "## Step 0:" \
+            "## Post-Screen 1:" \
             "## Screen 2:" \
             "## Screen 3:" \
             "## Screen 4:" \
@@ -149,14 +150,15 @@ jobs:
 
             echo "  ✓ Plugin: $name v$version"
 
-            # Check skills directory has at least one public skill
+            # Check skills directory has at least one skill (public or internal)
+            all_skills=$(find "$plugin_path/skills" -maxdepth 1 -type d ! -name "skills" | wc -l)
             public_skills=$(find "$plugin_path/skills" -maxdepth 1 -type d ! -name "_*" ! -name "skills" | wc -l)
-            if [ "$public_skills" -eq 0 ]; then
-              echo "ERROR: No public skills found in $plugin_path/skills"
+            if [ "$all_skills" -eq 0 ]; then
+              echo "ERROR: No skills found in $plugin_path/skills"
               exit 1
             fi
 
-            echo "  ✓ Found $public_skills public skill(s)"
+            echo "  ✓ Found $public_skills public + $((all_skills - public_skills)) internal skill(s)"
           done
 
           echo ""

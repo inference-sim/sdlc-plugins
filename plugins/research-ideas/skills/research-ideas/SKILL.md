@@ -183,6 +183,17 @@ AskUserQuestion:
 
 **Always show this screen.** Collect background sources with their paths/URLs.
 
+### Step 1.0: Detect Existing Background (silent)
+
+Check for existing background files that can be reused:
+
+```
+Glob: [CWD]/hypotheses/problem-context.md
+```
+
+Store:
+- `[PROBLEM_CONTEXT_PATH]` = path to the file if it exists, is readable, and is non-empty (Read the file to verify); empty string otherwise
+
 ### Step 1.1: Select Source Types
 
 ```
@@ -192,6 +203,10 @@ AskUserQuestion:
       header: "Background"
       multiSelect: true
       options:
+        # NEW — only shown if [PROBLEM_CONTEXT_PATH] is non-empty:
+        - label: "Use existing problem-context.md (Recommended)"
+          description: "Reuse background from a previous /hypothesis-test session"
+        # Existing options (always shown):
         - label: "Current repository (Recommended)"
           description: "Analyze the codebase in the current working directory"
         - label: "Other local repositories"
@@ -208,7 +223,10 @@ AskUserQuestion:
           description: "Start generating ideas without background context"
 ```
 
+**If `[PROBLEM_CONTEXT_PATH]` is empty:** Omit the "Use existing problem-context.md" option. Screen looks identical to current behavior.
+
 **Store source type selections:**
+- `[USE_EXISTING_CONTEXT]` = true if "Use existing problem-context.md" selected
 - `[INCLUDE_CURRENT_REPO]` = true if "Current repository" selected
 - `[ADD_LOCAL_REPOS]` = true if "Other local repositories" selected
 - `[ADD_GITHUB_REPOS]` = true if "GitHub repositories" selected
@@ -480,6 +498,28 @@ TaskUpdate:
 
 **Conditional based on `[BACKGROUND_MODE]`:**
 
+### If `[USE_EXISTING_CONTEXT]` = true:
+
+Set `[BACKGROUND_MODE]` = "reuse"
+
+```
+Task tool:
+  description: "Create research doc from existing background"
+  subagent_type: general-purpose
+  run_in_background: true
+  prompt: |
+    1. Read the problem statement from [PROBLEM_FILE_PATH]
+    2. Read the existing background from [PROBLEM_CONTEXT_PATH]
+    3. Extract the "# Background" section and everything under it (up to the end of the file or next top-level heading that isn't under Background)
+    4. Create [RESEARCH_FILE] with:
+       - "# Research Document"
+       - "## Problem Statement" with the problem content
+       - "---"
+       - The extracted Background section
+       - "---"
+       - A trailing blank line (for subsequent idea appending)
+```
+
 ### If `[BACKGROUND_MODE]` = "skip":
 Create a minimal research document with just the problem statement:
 ```
@@ -519,23 +559,14 @@ Task tool:
   subagent_type: general-purpose
   run_in_background: true
   prompt: |
-    Run the /_summarize-problem-context skill with these arguments:
-
-    Problem file: [PROBLEM_FILE_PATH]
-
-    Pre-configured sources (DO NOT ask user again - these were already collected):
-    - [INCLUDE_CURRENT_REPO] = [value from Step 1]
-    - [LOCAL_REPO_PATHS] = [list from Step 1, if any]
-    - [GITHUB_REPO_URLS] = [list from Step 1, if any]
-    - [REMOTE_URLS] = [list from Step 1, if any]
-    - [WEB_SEARCH_QUERIES] = [list from Step 1, if any]
-
-    Since sources are pre-configured, skip the asking steps and proceed directly to:
-    1. Launch PARALLEL background agents for each source
-    2. Collect and synthesize all summaries into [RESEARCH_FILE]
-
-    IMPORTANT: Write the background to [RESEARCH_FILE] immediately after the problem statement.
-    The judges will review [RESEARCH_FILE] and need to see both the problem AND background context.
+    Run /_summarize-problem-context with:
+    - PROBLEM_FILE_PATH: [PROBLEM_FILE_PATH]
+    - OUTPUT_FILE: [RESEARCH_FILE]
+    - INCLUDE_CURRENT_REPO: [value from Step 1]
+    - LOCAL_REPO_PATHS: [list from Step 1, if any]
+    - GITHUB_REPO_URLS: [list from Step 1, if any]
+    - REMOTE_URLS: [list from Step 1, if any]
+    - WEB_SEARCH_QUERIES: [list from Step 1, if any]
 ```
 
 **Wait for the background agent to complete** before proceeding. Use `Read` to verify `[RESEARCH_FILE]` exists.

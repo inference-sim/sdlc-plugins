@@ -4,6 +4,7 @@ description: Guided hypothesis-driven experimentation. Choose a project, generat
 allowed-tools:
   - Skill(_formulate-hypothesis *)
   - Skill(_scaffold-experiment *)
+  - Skill(_summarize-problem-context *)
   - Task
   - TaskOutput
   - AskUserQuestion
@@ -24,7 +25,12 @@ allowed-tools:
 
 End-to-end guided hypothesis experimentation with a deterministic 6-screen flow and background agent dispatch.
 
-**CRITICAL:** This skill MUST present the same UI flow every time. The user experience must be predictable and consistent.
+**CRITICAL:** This skill MUST present the same UI flow every time. Determinism is required because users build muscle memory around the screen sequence, documentation references specific screen numbers, and background agents expect a fixed configuration structure from each screen.
+
+## Terminology
+
+- **Background context** — domain knowledge and architectural information used to generate hypotheses
+- **Problem context file** — the file at `[PROJECT_ROOT]/hypotheses/problem-context.md` that stores background context
 
 **CRITICAL: NEVER STOP BETWEEN SCREENS.** After the user answers a config screen, immediately proceed to the next screen. Do NOT:
 - Summarize what the user just selected
@@ -34,20 +40,24 @@ End-to-end guided hypothesis experimentation with a deterministic 6-screen flow 
 - Ask for confirmation or approval to continue
 - Add any commentary between screens
 
-The ONLY time the flow pauses is when an AskUserQuestion is presented. Between screens, the transition is instant and silent. Screen 1 answer → immediately run Step 0 + Screen 2. Screen 2 completes → immediately show Screen 3. And so on.
+The ONLY time the flow pauses is when an AskUserQuestion is presented. Between screens, the transition is instant and silent. Screen 1 answer → immediately run project detection + background processing + Screen 2 (Generation). And so on.
 
 ## Fixed Screen Sequence
 
+<!-- If screen count changes, update the count in the first paragraph (intro line ~25) AND in Rule #1 below. -->
+
 Every invocation presents exactly these screens in this order:
 
-| Screen | Headers | Type | Purpose | Never Skip |
-|--------|---------|------|---------|------------|
-| 1 | "Project" + "Focus" + "Count" | Config (3 questions) | Setup: project, focus area, hypothesis count | Always show |
-| 2 | — | Dashboard | Hypothesis generation progress | Always show |
-| 3 | "Select" + "Execution" | Config (2 questions) | Pick hypotheses to test + execution mode | Always show |
-| 4 | "Approve" | Dashboard + Config | Scaffold experiments (dashboard), then batch approve | Always show |
-| 5 | — | Dashboard | Experiment progress (background agents) | Always show |
-| 6 | "Commit" | Config | Commit results | Always show |
+| Screen | Headers | Type | Purpose |
+|--------|---------|------|---------|
+| 1 | "Project" + "Focus" + "Count" + "Background" | Config (4 questions) | Setup: project, focus area, hypothesis count, background sources |
+| 2 | — | Dashboard | Hypothesis generation progress |
+| 3 | "Select" + "Execution" | Config (2 questions) | Pick hypotheses to test + execution mode |
+| 4 | "Approve" | Dashboard + Config | Scaffold experiments (dashboard), then batch approve |
+| 5 | — | Dashboard | Experiment progress (background agents) |
+| 6 | "Commit" | Config | Commit results |
+
+No screens are ever skipped. All screens are shown regardless of detected state.
 
 **Navigation:** Config screens (1, 3) use multi-question AskUserQuestion calls so the user can navigate left/right between questions before submitting.
 
@@ -84,11 +94,40 @@ After 5 minutes + 3 retries, mark as `Failed` with reason "experiment timeout".
 ### Invalid project path
 If the user-provided path doesn't exist or isn't a directory: show error, re-show Screen 1.
 
+### Background agent crash or timeout
+Each background agent has a 5-minute timeout. On timeout or crash: mark the task as `Failed`, log the error from TaskOutput, and continue the dashboard. Failed agents do not block other agents or subsequent screens.
+
+### Agent returns unparseable output
+If an agent doesn't return the expected format (e.g., missing `HYPOTHESIS:` or `VERDICT:` line): mark as `Failed` with reason "invalid output format". The dashboard continues with successful results.
+
+### Empty project (no source files)
+If `[PROJECT_ROOT]` contains no recognized source files after scanning: show "No source files found at [PROJECT_ROOT]." Re-show Screen 1.
+
+### Malformed problem-context.md
+If the problem context file exists but is empty or unreadable: log a warning and proceed without background context. Do not fail the flow.
+
 ---
 
-## Screen 1: Setup (SCREEN 1 — Always Show)
+## Pre-Screen Detection (silent, before Screen 1)
 
-Present all three config questions in a **single AskUserQuestion** so the user can navigate left/right between them:
+Before presenting Screen 1, silently check the current working directory for existing background files:
+
+```
+Glob("./research.md")
+Glob("./hypotheses/problem-context.md")
+```
+
+Store:
+- `[HAS_RESEARCH_MD]` = true if research.md exists, is readable, and contains a `# Background` section (Read the file to verify; if Read fails, set to false)
+- `[HAS_PROBLEM_CONTEXT]` = true if hypotheses/problem-context.md exists, is readable, and is non-empty (Read the file to verify; if Read fails, set to false)
+
+Never offer a reuse option for a file that failed Read validation.
+
+---
+
+## Screen 1: Setup
+
+Present all four config questions in a **single AskUserQuestion** so the user can navigate left/right between them:
 
 ```
 AskUserQuestion:
@@ -99,8 +138,8 @@ AskUserQuestion:
       options:
         - label: "Current directory (Recommended)"
           description: "Use the current working directory as the project"
-        - label: "Enter a path"
-          description: "Select 'Other' and type the absolute path to the project root"
+        - label: "Another repository"
+          description: "I'll provide the absolute path to a different project"
     - question: "What area of the project should we generate hypotheses for?"
       header: "Focus"
       multiSelect: false
@@ -123,21 +162,58 @@ AskUserQuestion:
           description: "Moderate depth — covers more ground"
         - label: "10"
           description: "Thorough exploration — takes longer to test all"
+    - question: "Select background sources for hypothesis generation:"
+      header: "Background"
+      multiSelect: true
+      options:
+        # Conditional — only if [HAS_RESEARCH_MD] = true:
+        - label: "Use existing research.md (Recommended)"
+          description: "Reuse background from a previous /research-ideas session"
+        # Conditional — only if [HAS_PROBLEM_CONTEXT] = true:
+        - label: "Use existing problem-context.md (Recommended)"
+          description: "Reuse background from a previous /hypothesis-test session"
+        # Always shown:
+        - label: "Current repository"
+          description: "Analyze the codebase for relevant context"
+        - label: "Other local repositories"
+          description: "Include related code from other local directories"
+        - label: "GitHub repositories"
+          description: "Include remote GitHub repos (fetched via API)"
+        - label: "Remote papers or URLs"
+          description: "Include arXiv papers, docs, blog posts, or web content"
+        - label: "Web search"
+          description: "Search the web for relevant papers and resources"
+        - label: "Skip background entirely"
+          description: "Generate hypotheses without background context"
 ```
+
+**If neither [HAS_RESEARCH_MD] nor [HAS_PROBLEM_CONTEXT] is true:** Omit the reuse options from the Background question. Only source types and "Skip" are shown.
 
 **After submission:**
 
-1. If "Enter a path" or "Other" selected for Project: use the user's typed path. If "Current directory": use CWD.
-2. **Validate** the path exists and is a directory (`Bash: ls <path>`). If invalid, show error and re-show Screen 1.
+1. If "Another repository" selected for Project: prompt for the path:
+   ```
+   AskUserQuestion:
+     questions:
+       - question: "Enter the absolute path to the project root:"
+         header: "Path"
+         multiSelect: false
+         options:
+           - label: "I'll type the path"
+             description: "Enter an absolute path like /Users/me/projects/my-repo"
+   ```
+   Use the path from the "Other" text field. If "Current directory": use CWD.
+2. **Validate** the path exists and is a directory (`Bash: ls <path>`). If invalid, show error and re-prompt for the path.
 3. Store project as `[PROJECT_ROOT]` (absolute path, no trailing slash).
 4. If "Specific component" or "Other" selected for Focus and user provided text: store that as `[FOCUS_AREA]`. Otherwise store the selected label.
 5. Store count as `[COUNT]`.
+6. Store background selections as `[BACKGROUND_SELECTIONS]`.
 
-**→ Immediately proceed to Step 0 + Screen 2. No commentary.**
+**→ Immediately proceed to project detection + background processing + Screen 2 (Generation). No commentary.**
 
 ---
 
-## Step 0: Detect Project Context (silent, after Screen 1)
+## Post-Screen 1: Detect Project Context (silent)
 
 After the user submits Screen 1, silently gather context from `[PROJECT_ROOT]`:
 
@@ -155,9 +231,59 @@ Store:
 - `[EXISTING_CLAIMS]` — claims from existing hypotheses (to avoid duplicates)
 - `[PENDING_HYPOTHESES]` — any with Status: Pending from previous runs
 
+### Process Background Selections
+
+Based on `[BACKGROUND_SELECTIONS]` from Screen 1:
+
+**If "Skip background entirely" is selected (alone or with others):** No action needed. Agents will skip background if the file doesn't exist.
+
+**If a reuse option is selected:**
+
+1. If "Use existing research.md":
+   - Read `[PROJECT_ROOT]/research.md`. If Read fails: show error "Failed to read research.md", re-show Screen 1.
+   - Extract the `# Background` section (everything from `# Background` to the next `---` or `# Idea`). If no `# Background` section found: show error "research.md has no Background section", re-show Screen 1.
+   - Ensure directory exists: `Bash("mkdir -p '[PROJECT_ROOT]/hypotheses'")`
+   - Write extracted content to `[PROJECT_ROOT]/hypotheses/problem-context.md`. If Write fails: show error, re-show Screen 1.
+2. If "Use existing problem-context.md":
+   - Verify `[PROJECT_ROOT]/hypotheses/problem-context.md` is readable and non-empty. If not: show error "problem-context.md is missing or empty", re-show Screen 1.
+3. If a reuse option is selected alongside source types, the reuse content is used as-is — ignore other source selections.
+
+**If only source types selected (no reuse, no skip):**
+
+Invoke `_summarize-problem-context` as a background agent. The skill handles its own path/URL collection prompts for source types that need them (local repos, GitHub, papers).
+
+```
+Task tool:
+  description: "Generate background summary"
+  subagent_type: general-purpose
+  run_in_background: true
+  prompt: |
+    Run the /_summarize-problem-context skill with these arguments:
+
+    Problem file: Create a temporary problem statement from the focus area:
+      "[FOCUS_AREA] for project at [PROJECT_ROOT]"
+
+    OUTPUT_FILE: [PROJECT_ROOT]/hypotheses/problem-context.md
+    DOCUMENT_TITLE: "Problem Context"
+
+    Source types selected by the user:
+    - [INCLUDE_CURRENT_REPO] = true/false
+    - [ADD_LOCAL_REPOS] = true/false
+    - [ADD_GITHUB_REPOS] = true/false
+    - [ADD_REMOTE_URLS] = true/false
+    - [ADD_WEB_SEARCH] = true/false
+
+    The skill will prompt the user for specific paths/URLs as needed.
+    Write the output to [PROJECT_ROOT]/hypotheses/problem-context.md
+```
+
+Wait for completion using `TaskOutput`. Check the agent's result:
+- If the agent failed or timed out: log a warning "Background generation failed: [error from TaskOutput]" and proceed without background context. Do not fail the flow.
+- If the agent succeeded: verify `[PROJECT_ROOT]/hypotheses/problem-context.md` exists and is non-empty using `Glob` + `Read`. If the file is missing or empty: log a warning "Background file not created" and proceed without background context.
+
 ---
 
-## Screen 2: Generation Dashboard (SCREEN 2 — Always Show)
+## Screen 2: Generation Dashboard
 
 **CRITICAL: This entire screen is fully autonomous. Do NOT pause, ask questions, show intermediate results, or wait for user input. Generate ALL [COUNT] hypotheses in parallel using background agents. The user sees progress only via task updates — never stop to discuss, confirm, or display individual results.**
 
@@ -184,46 +310,16 @@ Task(run_in_background: true): "Generate hypothesis 3"
 ```
 Task:
   description: "Generate hypothesis <I> of [COUNT]"
-  subagent_type: general-purpose
+  subagent_type: hypothesis-agent
   run_in_background: true
   prompt: |
-    You are generating hypothesis <I> of [COUNT] for a hypothesis-driven
-    experimentation session.
+    Run /_formulate-hypothesis "[PROJECT_ROOT]" "[FOCUS_AREA]" "[EXISTING_CLAIMS]" "[LANGUAGE]"
 
-    PROJECT_ROOT: <absolute path to project>
-    FOCUS_AREA: <entire project|performance|correctness|specific component>
-    LANGUAGE: <go|python|node|other>
-    EXISTING_CLAIMS: <comma-separated claims from previous runs, or empty>
-    YOUR_INDEX: <I> of [COUNT]
-
-    You MUST generate a hypothesis that is DISTINCT from existing claims
-    AND from what other parallel agents are likely to generate. To ensure
-    diversity, use your index to guide your focus:
-    - Agent 1: prioritize the most obvious untested behavior or gap
-    - Agent 2: prioritize performance or resource-related claims
-    - Agent 3: prioritize edge cases or error handling
-    - Agent 4+: explore config options, integration boundaries, or recently changed code
-
-    Process:
-    1. Scan the project (scoped to FOCUS_AREA, rooted at PROJECT_ROOT):
-       - Read README for claimed behaviors
-       - Find test files to identify what IS tested (find gaps)
-       - Grep source for complex logic, error paths, config options
-       - Identify recently changed behavior
-    2. Identify a testable gap:
-       - Performance claims with no benchmark
-       - Edge cases in core logic (boundary values, empty inputs, error paths)
-       - Config options whose effects are never validated
-       - Recently changed behavior with no test
-    3. Produce a testable claim — one sentence naming:
-       - The system/component under test
-       - The specific behavior or metric
-       - The expected outcome (with a number if possible)
-    4. Add falsifiability: "This is refuted if [opposite/null result]"
-    5. Check against EXISTING_CLAIMS — must be distinct
-
-    Principle: Generate the hypothesis WITHOUT reading implementation details.
-    Test behavior, not implementation.
+    You are agent <I> of [COUNT]. To ensure diversity, use your index:
+    - Agent 1: most obvious untested behavior or gap
+    - Agent 2: performance or resource-related claims
+    - Agent 3: edge cases or error handling
+    - Agent 4+: config options, integration boundaries, recently changed code
 
     Return exactly:
     HYPOTHESIS: [testable claim]
@@ -231,8 +327,10 @@ Task:
 ```
 
 Collect results using `TaskOutput`. As each agent completes:
-1. Parse `HYPOTHESIS` and `REFUTED_IF` from the agent's output
-2. Update the corresponding dashboard task → `completed`
+1. Check task status: if the agent failed or timed out, mark the dashboard task as `Failed` with reason from TaskOutput and continue.
+2. Validate output format: check that the output contains both a `HYPOTHESIS:` line and a `REFUTED_IF:` line. If either is missing, mark as `Failed` with reason "invalid output format" and continue.
+3. Parse `HYPOTHESIS` and `REFUTED_IF` from the agent's output.
+4. Update the corresponding dashboard task → `completed`.
 
 **After ALL agents complete:**
 
@@ -257,9 +355,9 @@ Collect results using `TaskOutput`. As each agent completes:
 
 ---
 
-## Screen 3: Select & Execute (SCREEN 3 — Always Show)
+## Screen 3: Select & Execute
 
-Combine `[NEW_HYPOTHESES]` with `[PENDING_HYPOTHESES]` from Step 0.
+Combine `[NEW_HYPOTHESES]` with `[PENDING_HYPOTHESES]` from the post-Screen 1 detection.
 
 Present both questions in a **single AskUserQuestion** so the user can navigate left/right between them:
 
@@ -297,7 +395,7 @@ Store selections as `[SELECTED]` and execution mode as `[EXEC_MODE]`.
 
 ---
 
-## Screen 4: Approve Experiment Designs (SCREEN 4 — Always Show)
+## Screen 4: Approve Experiment Designs
 
 ### Phase 1: Scaffolding Dashboard
 
@@ -321,42 +419,10 @@ Task(run_in_background: true): "Scaffold H3: <claim>"
 ```
 Task:
   description: "Scaffold H<N>: <short claim>"
-  subagent_type: general-purpose
+  subagent_type: hypothesis-agent
   run_in_background: true
   prompt: |
-    You are scaffolding an experiment for hypothesis H<N>.
-
-    PROJECT_ROOT: <absolute path to project>
-    HYPOTHESIS: <full testable claim>
-    REFUTED_IF: <falsifiability condition>
-    HYPOTHESIS_DIR: <PROJECT_ROOT>/hypotheses/h<N>-<slug>
-    LANGUAGE: <go|python|node|other>
-    BUILD_CMD: <project build command>
-    ENTRY_POINT: <main binary/script>
-
-    Execute these steps:
-
-    1. Read project source files under PROJECT_ROOT for context
-    2. Design the experiment:
-       - Independent variable: what changes between Config A and Config B
-       - Controlled variables: what stays the same
-       - Dependent variable: what you measure
-    3. Create HYPOTHESIS_DIR (mkdir -p)
-    4. Generate run.sh:
-       - #!/usr/bin/env bash + set -euo pipefail
-       - Comment block explaining hypothesis
-       - Create output/ subdirectory
-       - Run Config A → output/config_a.txt
-       - Run Config B → output/config_b.txt
-       - Print completion summary
-       - chmod +x run.sh
-    5. Generate analyze.py:
-       - Read output/config_a.txt and output/config_b.txt
-       - Parse metrics, compute comparison
-       - Print formatted summary table
-    6. Generate FINDINGS.md template:
-       - Pre-fill hypothesis and experiment design sections
-       - Leave Results and Analysis as <!-- Auto-populated -->
+    Run /_scaffold-experiment "[PROJECT_ROOT]" "[HYPOTHESIS_DIR]" "[CLAIM]" "[REFUTED_IF]" "[LANGUAGE]" "[BUILD_CMD]" "[ENTRY_POINT]"
 
     Return exactly:
     HYPOTHESIS_DIR: hypotheses/h<N>-<slug>
@@ -391,7 +457,7 @@ Store approved hypotheses as `[APPROVED]`.
 
 ---
 
-## Screen 5: Testing Dashboard (SCREEN 5 — Always Show)
+## Screen 5: Testing Dashboard
 
 **Create one task per approved hypothesis:**
 
@@ -409,52 +475,22 @@ TaskCreate: "Update hypothesis catalog"  (activeForm: "Updating catalog")
 ```
 Task:
   description: "Test H<N>: <short claim>"
-  subagent_type: general-purpose
+  subagent_type: hypothesis-agent
   run_in_background: true
   prompt: |
-    You are testing hypothesis H<N> for the hypothesis-test plugin.
+    Test hypothesis H<N> at <PROJECT_ROOT>/hypotheses/h<N>-<slug>.
+    The directory contains scaffolded run.sh, analyze.py, FINDINGS.md.
 
-    PROJECT_ROOT: <absolute path to project>
-    HYPOTHESIS: <full testable claim>
-    REFUTED_IF: <falsifiability condition>
-    DIRECTORY: <PROJECT_ROOT>/hypotheses/h<N>-<slug>
+    1. Run /_run-and-analyze "hypotheses/h<N>-<slug>" "<CLAIM>"
+    2. Parse VERDICT, SUMMARY, METRICS_TABLE, ANALYSIS_OUTPUT from the result
+    3. Run /_document-findings "hypotheses/h<N>-<slug>" "<verdict>" "<summary>" "<metrics>" "<analysis>"
 
-    The experiment has already been scaffolded and approved. The directory
-    contains: run.sh, analyze.py, FINDINGS.md (template).
+    Do NOT update <PROJECT_ROOT>/hypotheses/README.md — the orchestrator
+    handles catalog updates after all agents complete.
 
-    Execute these steps in order:
-
-    1. RUN EXPERIMENT
-       Bash: cd <PROJECT_ROOT>/hypotheses/h<N>-<slug> && ./run.sh
-       Timeout: 5 minutes. If it fails, read the error, try to fix
-       run.sh, and re-run (max 3 attempts). If still failing, set
-       VERDICT=Failed.
-
-    2. RUN ANALYSIS
-       Bash: cd <PROJECT_ROOT>/hypotheses/h<N>-<slug> && python3 analyze.py
-       If it fails, fix parsing issues and retry (max 3 attempts).
-
-    3. INTERPRET RESULTS
-       Read the analysis output. Determine verdict:
-       - Confirmed: dependent variable moved in predicted direction
-       - Refuted: did NOT move as predicted or moved opposite
-       - Inconclusive: mixed results, tiny effect, questionable data
-       - Failed: experiment could not run after retries
-
-    4. DOCUMENT FINDINGS
-       Read <PROJECT_ROOT>/hypotheses/h<N>-<slug>/FINDINGS.md template.
-       Populate Results and Analysis sections:
-       - Results: metrics comparison table
-       - Analysis: verdict, reasoning, effect size, file:line citations
-       Update HYPOTHESIS.md status from Pending to the verdict.
-
-       Do NOT update <PROJECT_ROOT>/hypotheses/README.md — the orchestrator
-       handles catalog updates after all agents complete.
-
-    5. REPORT BACK
-       Return exactly:
-       VERDICT: <Confirmed|Refuted|Inconclusive|Failed>
-       SUMMARY: <2-3 sentence interpretation>
+    Return exactly:
+    VERDICT: <Confirmed|Refuted|Inconclusive|Failed>
+    SUMMARY: <2-3 sentence interpretation>
 ```
 
 ### Parallel Mode
@@ -495,7 +531,7 @@ Store all verdicts as `[RESULTS]`.
 
 ---
 
-## Screen 6: Commit (SCREEN 6 — Always Show)
+## Screen 6: Commit
 
 ```
 AskUserQuestion:

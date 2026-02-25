@@ -33,23 +33,7 @@ Make sure you're running from the sdlc-plugins directory or that the plugin is p
 
 ## Setup
 
-This skill uses OpenAI-compatible API format (`/v1/chat/completions`). Set environment variables for your provider:
-
-**Option 1 - OpenAI (primary):**
-```bash
-export OPENAI_API_KEY='your-key'
-export OPENAI_BASE_URL='https://api.openai.com'  # or your LiteLLM proxy
-```
-
-**Option 2 - Using Anthropic credentials with a proxy (fallback):**
-```bash
-export ANTHROPIC_AUTH_TOKEN='your-key'
-export ANTHROPIC_BASE_URL='http://localhost:4000'  # MUST be a LiteLLM proxy or OpenAI-compatible endpoint
-```
-
-> **⚠️ Important:** `ANTHROPIC_BASE_URL` must point to an OpenAI-compatible endpoint (like a LiteLLM proxy), NOT directly to `api.anthropic.com`. Anthropic's native API uses `/v1/messages` which is incompatible with this skill.
-
-Add to your `.env` file or shell profile.
+See `README.md` in this directory for setup instructions, available models, and troubleshooting.
 
 ## Usage
 
@@ -64,10 +48,7 @@ Add to your `.env` file or shell profile.
 ## Arguments
 
 - **Plan path**: Ends with `.md` → treated as plan file
-- **Model**: LiteLLM format `provider/model`. Default: `Azure/gpt-4o`
-  - `Azure/gpt-4o` - GPT-4o on Azure
-  - `GCP/gemini-2.5-flash` - Gemini 2.5 Flash on GCP
-  - `aws/claude-opus-4-6` - Claude Opus 4.6 on AWS
+- **Model**: LiteLLM format `provider/model`. Default: `Azure/gpt-4o`. See README.md for available models.
 - **Flags**: `--dry-run`, `--check-models`, `--help`, `--no-redact`
 
 ### Model Connectivity Check
