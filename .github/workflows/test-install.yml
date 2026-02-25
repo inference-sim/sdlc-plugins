@@ -76,8 +76,9 @@ jobs:
           echo "Checking hypothesis-test orchestrator has all 6 screens..."
 
           for screen in \
+            "## Pre-Screen Detection" \
             "## Screen 1:" \
-            "## Step 0:" \
+            "## Post-Screen 1:" \
             "## Screen 2:" \
             "## Screen 3:" \
             "## Screen 4:" \
