@@ -21,6 +21,12 @@
       "source": "./plugins/hypothesis-test",
       "description": "Guided hypothesis-driven experimentation with auto-analysis",
       "version": "0.1.0"
+    },
+    {
+      "name": "shared-skills",
+      "source": "./plugins/shared-skills",
+      "description": "Internal shared skills for cross-plugin use",
+      "version": "0.1.0"
     }
   ]
 }
