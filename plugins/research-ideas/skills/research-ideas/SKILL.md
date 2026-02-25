@@ -560,23 +560,14 @@ Task tool:
   subagent_type: general-purpose
   run_in_background: true
   prompt: |
-    Run the /_summarize-problem-context skill with these arguments:
-
-    Problem file: [PROBLEM_FILE_PATH]
-
-    Pre-configured sources (DO NOT ask user again - these were already collected):
-    - [INCLUDE_CURRENT_REPO] = [value from Step 1]
-    - [LOCAL_REPO_PATHS] = [list from Step 1, if any]
-    - [GITHUB_REPO_URLS] = [list from Step 1, if any]
-    - [REMOTE_URLS] = [list from Step 1, if any]
-    - [WEB_SEARCH_QUERIES] = [list from Step 1, if any]
-
-    Since sources are pre-configured, skip the asking steps and proceed directly to:
-    1. Launch PARALLEL background agents for each source
-    2. Collect and synthesize all summaries into [RESEARCH_FILE]
-
-    IMPORTANT: Write the background to [RESEARCH_FILE] immediately after the problem statement.
-    The judges will review [RESEARCH_FILE] and need to see both the problem AND background context.
+    Run /_summarize-problem-context with:
+    - PROBLEM_FILE_PATH: [PROBLEM_FILE_PATH]
+    - OUTPUT_FILE: [RESEARCH_FILE]
+    - INCLUDE_CURRENT_REPO: [value from Step 1]
+    - LOCAL_REPO_PATHS: [list from Step 1, if any]
+    - GITHUB_REPO_URLS: [list from Step 1, if any]
+    - REMOTE_URLS: [list from Step 1, if any]
+    - WEB_SEARCH_QUERIES: [list from Step 1, if any]
 ```
 
 **Wait for the background agent to complete** before proceeding. Use `Read` to verify `[RESEARCH_FILE]` exists.

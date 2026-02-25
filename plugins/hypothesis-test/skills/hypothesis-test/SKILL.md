@@ -201,12 +201,12 @@ Store:
 
 Based on `[BACKGROUND_SELECTIONS]` from Screen 1:
 
-**If "Skip background" is selected (alone or with others):** Set `[BACKGROUND_CONTENT]` = empty.
+**If "Skip background" is selected (alone or with others):** No action needed. Agents will skip background if the file doesn't exist.
 
 **If a reuse option is selected:**
 
-1. If "Use existing research.md": Read `[PROJECT_ROOT]/research.md`, extract the `# Background` section (everything from `# Background` to the next `---` or `# Idea`), write to `[PROJECT_ROOT]/hypotheses/problem-context.md`, store as `[BACKGROUND_CONTENT]`
-2. If "Use existing problem-context.md": Read `[PROJECT_ROOT]/hypotheses/problem-context.md`, store as `[BACKGROUND_CONTENT]`
+1. If "Use existing research.md": Read `[PROJECT_ROOT]/research.md`, extract the `# Background` section (everything from `# Background` to the next `---` or `# Idea`), write to `[PROJECT_ROOT]/hypotheses/problem-context.md`
+2. If "Use existing problem-context.md": No action needed — file already exists at `[PROJECT_ROOT]/hypotheses/problem-context.md`
 3. If a reuse option is selected alongside source types, the reuse content is used as-is — ignore other source selections.
 
 **If only source types selected (no reuse, no skip):**
@@ -238,7 +238,7 @@ Task tool:
     Write the output to [PROJECT_ROOT]/hypotheses/problem-context.md
 ```
 
-Wait for completion. Read the file and store as `[BACKGROUND_CONTENT]`.
+Wait for completion. The file is now at `[PROJECT_ROOT]/hypotheses/problem-context.md` for agents to read.
 
 ---
 
@@ -269,55 +269,16 @@ Task(run_in_background: true): "Generate hypothesis 3"
 ```
 Task:
   description: "Generate hypothesis <I> of [COUNT]"
-  subagent_type: general-purpose
+  subagent_type: hypothesis-agent
   run_in_background: true
   prompt: |
-    You are generating hypothesis <I> of [COUNT] for a hypothesis-driven
-    experimentation session.
+    Run /_formulate-hypothesis "[PROJECT_ROOT]" "[FOCUS_AREA]" "[EXISTING_CLAIMS]" "[LANGUAGE]"
 
-    PROJECT_ROOT: <absolute path to project>
-    FOCUS_AREA: <entire project|performance|correctness|specific component>
-    LANGUAGE: <go|python|node|other>
-    EXISTING_CLAIMS: <comma-separated claims from previous runs, or empty>
-    BACKGROUND_CONTEXT: |
-      [BACKGROUND_CONTENT or "No background context provided. Scan the project independently."]
-    YOUR_INDEX: <I> of [COUNT]
-
-    You MUST generate a hypothesis that is DISTINCT from existing claims
-    AND from what other parallel agents are likely to generate. To ensure
-    diversity, use your index to guide your focus:
-    - Agent 1: prioritize the most obvious untested behavior or gap
-    - Agent 2: prioritize performance or resource-related claims
-    - Agent 3: prioritize edge cases or error handling
-    - Agent 4+: explore config options, integration boundaries, or recently changed code
-
-    Background Context:
-    Use the following background context to inform your hypothesis generation.
-    This provides domain knowledge and project understanding beyond what you
-    find by scanning files. Leverage it to generate more targeted hypotheses.
-
-    BACKGROUND_CONTEXT
-
-    Process:
-    1. Scan the project (scoped to FOCUS_AREA, rooted at PROJECT_ROOT):
-       - Read README for claimed behaviors
-       - Find test files to identify what IS tested (find gaps)
-       - Grep source for complex logic, error paths, config options
-       - Identify recently changed behavior
-    2. Identify a testable gap:
-       - Performance claims with no benchmark
-       - Edge cases in core logic (boundary values, empty inputs, error paths)
-       - Config options whose effects are never validated
-       - Recently changed behavior with no test
-    3. Produce a testable claim — one sentence naming:
-       - The system/component under test
-       - The specific behavior or metric
-       - The expected outcome (with a number if possible)
-    4. Add falsifiability: "This is refuted if [opposite/null result]"
-    5. Check against EXISTING_CLAIMS — must be distinct
-
-    Principle: Generate the hypothesis WITHOUT reading implementation details.
-    Test behavior, not implementation.
+    You are agent <I> of [COUNT]. To ensure diversity, use your index:
+    - Agent 1: most obvious untested behavior or gap
+    - Agent 2: performance or resource-related claims
+    - Agent 3: edge cases or error handling
+    - Agent 4+: config options, integration boundaries, recently changed code
 
     Return exactly:
     HYPOTHESIS: [testable claim]
@@ -415,42 +376,10 @@ Task(run_in_background: true): "Scaffold H3: <claim>"
 ```
 Task:
   description: "Scaffold H<N>: <short claim>"
-  subagent_type: general-purpose
+  subagent_type: hypothesis-agent
   run_in_background: true
   prompt: |
-    You are scaffolding an experiment for hypothesis H<N>.
-
-    PROJECT_ROOT: <absolute path to project>
-    HYPOTHESIS: <full testable claim>
-    REFUTED_IF: <falsifiability condition>
-    HYPOTHESIS_DIR: <PROJECT_ROOT>/hypotheses/h<N>-<slug>
-    LANGUAGE: <go|python|node|other>
-    BUILD_CMD: <project build command>
-    ENTRY_POINT: <main binary/script>
-
-    Execute these steps:
-
-    1. Read project source files under PROJECT_ROOT for context
-    2. Design the experiment:
-       - Independent variable: what changes between Config A and Config B
-       - Controlled variables: what stays the same
-       - Dependent variable: what you measure
-    3. Create HYPOTHESIS_DIR (mkdir -p)
-    4. Generate run.sh:
-       - #!/usr/bin/env bash + set -euo pipefail
-       - Comment block explaining hypothesis
-       - Create output/ subdirectory
-       - Run Config A → output/config_a.txt
-       - Run Config B → output/config_b.txt
-       - Print completion summary
-       - chmod +x run.sh
-    5. Generate analyze.py:
-       - Read output/config_a.txt and output/config_b.txt
-       - Parse metrics, compute comparison
-       - Print formatted summary table
-    6. Generate FINDINGS.md template:
-       - Pre-fill hypothesis and experiment design sections
-       - Leave Results and Analysis as <!-- Auto-populated -->
+    Run /_scaffold-experiment "[PROJECT_ROOT]" "[HYPOTHESIS_DIR]" "[CLAIM]" "[REFUTED_IF]" "[LANGUAGE]" "[BUILD_CMD]" "[ENTRY_POINT]"
 
     Return exactly:
     HYPOTHESIS_DIR: hypotheses/h<N>-<slug>
@@ -503,52 +432,22 @@ TaskCreate: "Update hypothesis catalog"  (activeForm: "Updating catalog")
 ```
 Task:
   description: "Test H<N>: <short claim>"
-  subagent_type: general-purpose
+  subagent_type: hypothesis-agent
   run_in_background: true
   prompt: |
-    You are testing hypothesis H<N> for the hypothesis-test plugin.
+    Test hypothesis H<N> at <PROJECT_ROOT>/hypotheses/h<N>-<slug>.
+    The directory contains scaffolded run.sh, analyze.py, FINDINGS.md.
 
-    PROJECT_ROOT: <absolute path to project>
-    HYPOTHESIS: <full testable claim>
-    REFUTED_IF: <falsifiability condition>
-    DIRECTORY: <PROJECT_ROOT>/hypotheses/h<N>-<slug>
+    1. Run /_run-and-analyze "hypotheses/h<N>-<slug>" "<CLAIM>"
+    2. Parse VERDICT, SUMMARY, METRICS_TABLE, ANALYSIS_OUTPUT from the result
+    3. Run /_document-findings "hypotheses/h<N>-<slug>" "<verdict>" "<summary>" "<metrics>" "<analysis>"
 
-    The experiment has already been scaffolded and approved. The directory
-    contains: run.sh, analyze.py, FINDINGS.md (template).
+    Do NOT update <PROJECT_ROOT>/hypotheses/README.md — the orchestrator
+    handles catalog updates after all agents complete.
 
-    Execute these steps in order:
-
-    1. RUN EXPERIMENT
-       Bash: cd <PROJECT_ROOT>/hypotheses/h<N>-<slug> && ./run.sh
-       Timeout: 5 minutes. If it fails, read the error, try to fix
-       run.sh, and re-run (max 3 attempts). If still failing, set
-       VERDICT=Failed.
-
-    2. RUN ANALYSIS
-       Bash: cd <PROJECT_ROOT>/hypotheses/h<N>-<slug> && python3 analyze.py
-       If it fails, fix parsing issues and retry (max 3 attempts).
-
-    3. INTERPRET RESULTS
-       Read the analysis output. Determine verdict:
-       - Confirmed: dependent variable moved in predicted direction
-       - Refuted: did NOT move as predicted or moved opposite
-       - Inconclusive: mixed results, tiny effect, questionable data
-       - Failed: experiment could not run after retries
-
-    4. DOCUMENT FINDINGS
-       Read <PROJECT_ROOT>/hypotheses/h<N>-<slug>/FINDINGS.md template.
-       Populate Results and Analysis sections:
-       - Results: metrics comparison table
-       - Analysis: verdict, reasoning, effect size, file:line citations
-       Update HYPOTHESIS.md status from Pending to the verdict.
-
-       Do NOT update <PROJECT_ROOT>/hypotheses/README.md — the orchestrator
-       handles catalog updates after all agents complete.
-
-    5. REPORT BACK
-       Return exactly:
-       VERDICT: <Confirmed|Refuted|Inconclusive|Failed>
-       SUMMARY: <2-3 sentence interpretation>
+    Return exactly:
+    VERDICT: <Confirmed|Refuted|Inconclusive|Failed>
+    SUMMARY: <2-3 sentence interpretation>
 ```
 
 ### Parallel Mode

@@ -1,13 +1,13 @@
 # Problem Statement
 
-What to do for Chinese New Year?
+What to wear for Valentine's Day?
 
 ## Context
 
-Looking for creative and meaningful ways to celebrate Chinese New Year, including:
-- Traditional customs and activities
-- Modern celebration ideas
-- Food and recipes
-- Family activities
-- Decorations and preparations
-- Cultural significance and practices to honor
+Explore outfit ideas, style considerations, and fashion choices for a Valentine's Day occasion. Consider factors like:
+- Venue type (upscale restaurant, casual cafe, outdoor activity, home dinner)
+- Personal style preferences and comfort
+- Color coordination and Valentine's Day aesthetics
+- Weather and seasonal appropriateness
+- Budget-friendly vs. splurge options
+- Accessories and finishing touches
