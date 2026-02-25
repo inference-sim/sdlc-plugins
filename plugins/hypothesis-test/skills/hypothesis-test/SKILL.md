@@ -157,11 +157,7 @@ Store:
 - `[EXISTING_CLAIMS]` — claims from existing hypotheses (to avoid duplicates)
 - `[PENDING_HYPOTHESES]` — any with Status: Pending from previous runs
 
----
-
-## Screen 1.5: Detect Existing Background (silent, after Step 0)
-
-After Step 0 completes, check for existing background files:
+**Also detect existing background files:**
 
 ```
 Glob("[PROJECT_ROOT]/research.md")
@@ -178,67 +174,26 @@ Store:
 
 ## Screen 2: Background (SCREEN 2 — Always Show)
 
-Present background options based on what was detected:
+**This is a single screen.** Present one multi-select AskUserQuestion combining reuse options and source types. The `_summarize-problem-context` skill handles any path/URL collection internally.
+
+Background detection from Step 0 determines which reuse options appear:
 
 ```
 AskUserQuestion:
   questions:
-    - question: "How should we gather background context for hypothesis generation?"
+    - question: "Select background sources for hypothesis generation (select multiple, or skip):"
       header: "Background"
-      multiSelect: false
+      multiSelect: true
       options:
         # Conditional — only if [HAS_RESEARCH_MD] = true:
-        - label: "Use existing research.md background (Recommended)"
+        - label: "Use existing research.md (Recommended)"
           description: "Reuse background from a previous /research-ideas session"
         # Conditional — only if [HAS_PROBLEM_CONTEXT] = true:
         - label: "Use existing problem-context.md (Recommended)"
           description: "Reuse background from a previous /hypothesis-test session"
         # Always shown:
-        - label: "Generate new background"
-          description: "Select sources (repos, papers, URLs) and generate fresh context"
-        - label: "Skip background"
-          description: "Generate hypotheses without background context"
-```
-
-**If neither [HAS_RESEARCH_MD] nor [HAS_PROBLEM_CONTEXT] is true:** Only show "Generate new background" and "Skip background".
-
-### If "Use existing research.md background" selected:
-
-1. Read `[RESEARCH_MD_PATH]`
-2. Extract the `# Background` section (everything from `# Background` to the next `---` or `# Idea`)
-3. Write to `[PROJECT_ROOT]/hypotheses/problem-context.md`:
-   ```markdown
-   # Problem Context
-
-   ## Problem Statement
-
-   [FOCUS_AREA description or extracted problem statement]
-
-   ---
-
-   [Extracted Background section]
-   ```
-4. Store extracted background as `[BACKGROUND_CONTENT]`
-
-### If "Use existing problem-context.md" selected:
-
-1. Read `[PROBLEM_CONTEXT_PATH]`
-2. Extract background content
-3. Store as `[BACKGROUND_CONTENT]`
-
-### If "Generate new background" selected:
-
-Show source selection sub-screens:
-
-```
-AskUserQuestion:
-  questions:
-    - question: "Which sources should be used to gather background context?"
-      header: "Sources"
-      multiSelect: true
-      options:
-        - label: "Current repository (Recommended)"
-          description: "Analyze the codebase in the current working directory"
+        - label: "Current repository"
+          description: "Analyze the codebase at [PROJECT_ROOT]"
         - label: "Other local repositories"
           description: "Include related code from other local directories"
         - label: "GitHub repositories"
@@ -247,11 +202,25 @@ AskUserQuestion:
           description: "Include arXiv papers, docs, blog posts, or web content"
         - label: "Web search"
           description: "Search the web for relevant papers and resources"
+        - label: "Skip background"
+          description: "Generate hypotheses without background context"
 ```
 
-For each selected source type, prompt for paths/URLs (follow the same patterns as research-ideas Step 1.2).
+**If neither [HAS_RESEARCH_MD] nor [HAS_PROBLEM_CONTEXT] is true:** Omit the reuse options. Only source types and "Skip" are shown.
 
-Then invoke `_summarize-problem-context`:
+**If "Skip background" is selected (alone or with others):** Treat as skip — set `[BACKGROUND_CONTENT]` = empty.
+
+### Processing selections:
+
+**If a reuse option is selected:**
+
+1. If "Use existing research.md": Read `[RESEARCH_MD_PATH]`, extract the `# Background` section (everything from `# Background` to the next `---` or `# Idea`), write to `[PROJECT_ROOT]/hypotheses/problem-context.md`, store as `[BACKGROUND_CONTENT]`
+2. If "Use existing problem-context.md": Read `[PROBLEM_CONTEXT_PATH]`, store as `[BACKGROUND_CONTENT]`
+3. If a reuse option is selected alongside source types, the reuse content is used as-is — ignore other source selections.
+
+**If only source types selected (no reuse, no skip):**
+
+Invoke `_summarize-problem-context` as a background agent. The skill handles its own path/URL collection prompts for source types that need them (local repos, GitHub, papers).
 
 ```
 Task tool:
@@ -267,21 +236,18 @@ Task tool:
     OUTPUT_FILE: [PROJECT_ROOT]/hypotheses/problem-context.md
     DOCUMENT_TITLE: "Problem Context"
 
-    Pre-configured sources (DO NOT ask user again):
-    - [INCLUDE_CURRENT_REPO] = [value]
-    - [LOCAL_REPO_PATHS] = [list, if any]
-    - [GITHUB_REPO_URLS] = [list, if any]
-    - [REMOTE_URLS] = [list, if any]
-    - [WEB_SEARCH_QUERIES] = [list, if any]
+    Source types selected by the user:
+    - [INCLUDE_CURRENT_REPO] = true/false
+    - [ADD_LOCAL_REPOS] = true/false
+    - [ADD_GITHUB_REPOS] = true/false
+    - [ADD_REMOTE_URLS] = true/false
+    - [ADD_WEB_SEARCH] = true/false
 
+    The skill will prompt the user for specific paths/URLs as needed.
     Write the output to [PROJECT_ROOT]/hypotheses/problem-context.md
 ```
 
 Wait for completion. Read the file and store as `[BACKGROUND_CONTENT]`.
-
-### If "Skip background" selected:
-
-Set `[BACKGROUND_CONTENT]` = empty. Agents scan project independently.
 
 **→ Immediately proceed to Screen 3 (Generation Dashboard). No commentary.**
 
