@@ -138,8 +138,8 @@ AskUserQuestion:
       options:
         - label: "Current directory (Recommended)"
           description: "Use the current working directory as the project"
-        - label: "Enter a path"
-          description: "Select 'Other' and type the absolute path to the project root"
+        - label: "Another repository"
+          description: "I'll provide the absolute path to a different project"
     - question: "What area of the project should we generate hypotheses for?"
       header: "Focus"
       multiSelect: false
@@ -191,8 +191,19 @@ AskUserQuestion:
 
 **After submission:**
 
-1. If "Enter a path" or "Other" selected for Project: use the user's typed path. If "Current directory": use CWD.
-2. **Validate** the path exists and is a directory (`Bash: ls <path>`). If invalid, show error and re-show Screen 1.
+1. If "Another repository" selected for Project: prompt for the path:
+   ```
+   AskUserQuestion:
+     questions:
+       - question: "Enter the absolute path to the project root:"
+         header: "Path"
+         multiSelect: false
+         options:
+           - label: "I'll type the path"
+             description: "Enter an absolute path like /Users/me/projects/my-repo"
+   ```
+   Use the path from the "Other" text field. If "Current directory": use CWD.
+2. **Validate** the path exists and is a directory (`Bash: ls <path>`). If invalid, show error and re-prompt for the path.
 3. Store project as `[PROJECT_ROOT]` (absolute path, no trailing slash).
 4. If "Specific component" or "Other" selected for Focus and user provided text: store that as `[FOCUS_AREA]`. Otherwise store the selected label.
 5. Store count as `[COUNT]`.
