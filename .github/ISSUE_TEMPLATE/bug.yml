@@ -1,0 +1,19 @@
+name: Bug Report
+description: Report a bug
+labels: ["bug"]
+body:
+  - type: input
+    attributes:
+      label: Plugin name
+      placeholder: e.g. hypothesis-test
+  - type: textarea
+    attributes:
+      label: What happened?
+      description: Include steps to reproduce.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
