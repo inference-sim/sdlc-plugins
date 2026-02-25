@@ -1,71 +1,74 @@
 # CLAUDE.md
 
-This is a private Claude Code plugin marketplace for the AI Platform Optimization team.
+Private Claude Code plugin marketplace for the AI Platform Optimization team. Plugins live under `plugins/` and are registered in `.claude-plugin/marketplace.json`.
 
-## Project Overview
+## Language & Standards
 
-This repo hosts internal SDLC plugins that extend Claude Code with custom skills for the team. Plugins are organized under `plugins/` and registered in `.claude-plugin/marketplace.json`.
+- **Python**: PEP8, type hints where practical
+- **Shell**: Follow ShellCheck recommendations
 
-## Development Guidelines
+## Plugin & Skill Structure
 
-### Language & Standards
+Key paths:
+- `plugins/<plugin-name>/.claude-plugin/plugin.json` — Plugin metadata
+- `plugins/<plugin-name>/skills/<skill-name>/SKILL.md` — Skill definition
 
-- **Primary language**: Python (follow PEP8)
-- **Shell scripts**: Follow ShellCheck recommendations
-- Use type hints in Python where practical
+SKILL.md files use YAML frontmatter (`name`, `description`, `allowed-tools`) followed by markdown content.
 
-### Plugin Structure
-
-See `README.md` for the full plugin creation guide. Key paths:
-- `plugins/<plugin-name>/.claude-plugin/plugin.json` - Plugin metadata
-- `plugins/<plugin-name>/skills/<skill-name>/SKILL.md` - Skill definition
-
-### Skill Conventions
-
-#### SKILL.md Format
-
-Skills use YAML frontmatter followed by markdown content:
-
-```yaml
----
-name: skill-name
-description: Brief description of what the skill does
-argument-hint: <required_arg> [optional_arg]
-allowed-tools:
-  - Bash(specific-command *)
-  - Skill(other-skill *)
----
-```
-
-#### Naming Conventions
+### Naming Conventions
 
 - **Plugin names**: lowercase, hyphenated (e.g., `generate-great-ideas`)
 - **Skill names**: lowercase, hyphenated, action-oriented (e.g., `review-plan`, `generate-ideas`)
+- **Internal skills**: prefixed with `_` (e.g., `_scaffold-experiment`) — these are NOT user-invocable and are only called by other skills via `Skill()` references
 - **Skill files**: Always `SKILL.md` (uppercase)
 - **Scripts**: lowercase, underscored Python files (e.g., `build_request.py`)
 
+## Change Checklist
+
+When adding or modifying a plugin, skill, or feature, **always** update these:
+
+1. **`README.md`** — Update available skills, usage examples, and feature lists
+2. **`CONTRIBUTING.md`** — Update directory structure, local dev instructions, or release steps if affected
+3. **CI workflows** (`.github/workflows/`) — Add validation for new skills/plugins (e.g., screen flow checks, structure validation)
+4. **`marketplace.json`** — Register new plugins in `.claude-plugin/marketplace.json`
+5. **`plugin.json`** — Ensure version matches `marketplace.json` entry
+
 ## Testing
 
-<!-- TODO: Document the custom test script when available -->
+Always run local validation before submitting changes:
 
-Run tests before submitting changes:
 ```bash
-# Test script TBD
+./scripts/test-local.sh
 ```
 
-Test plugins locally:
+For interactive testing of a plugin:
+
 ```bash
-claude --plugin-dir ./plugins/<plugin-name>
+./scripts/dev.sh                    # Launch Claude Code with all local plugins
+./scripts/dev.sh -p "test my skill" # Pass arguments to claude
 ```
+
+## CI/CD
+
+PRs automatically run:
+- **`validate.yml`** — Marketplace JSON validity, plugin structure, skill frontmatter, cross-plugin `Skill()` references, version consistency
+- **`test-install.yml`** — YAML frontmatter parsing, hypothesis-test screen flow validation, plugin structure compatibility
+
+Tagged releases (`v*`) run:
+- **`release.yml`** — Validates tag matches marketplace version, generates changelog, creates GitHub release
 
 ## Common Tasks
 
 ### Adding a New Skill
 
-1. Create `plugins/<plugin>/skills/<skill-name>/SKILL.md`
+1. Create `plugins/<plugin>/skills/<skill-name>/SKILL.md` (or `_<skill-name>/` for internal skills)
 2. Define frontmatter with `name`, `description`, `allowed-tools`
-3. Test locally with `claude --plugin-dir`
+3. Run `./scripts/test-local.sh` to validate
+4. Test interactively with `./scripts/dev.sh`
+5. Follow the [Change Checklist](#change-checklist) above
 
-### Registering a Plugin
+### Registering a New Plugin
 
-Add entry to `.claude-plugin/marketplace.json` under `plugins` array.
+1. Add entry to `.claude-plugin/marketplace.json` under `plugins` array
+2. Ensure `plugin.json` version matches the marketplace entry
+3. Follow the [Change Checklist](#change-checklist) above
