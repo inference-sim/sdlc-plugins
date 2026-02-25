@@ -236,7 +236,11 @@ if [ "$KEY_SOURCE" = "ANTHROPIC_AUTH_TOKEN (fallback)" ]; then
         echo "  ANTHROPIC_BASE_URL points to api.anthropic.com, but this"
         echo "  skill requires an OpenAI-compatible endpoint (/v1/chat/completions)."
         echo ""
-        echo "  Quick fix: point to a LiteLLM proxy or set OPENAI_API_KEY instead."
+        echo "  Quick fix:"
+        echo "    export ANTHROPIC_BASE_URL='http://localhost:4000'  # LiteLLM proxy"
+        echo "    # or use OpenAI credentials instead:"
+        echo "    export OPENAI_API_KEY='your-key'"
+        echo ""
         echo "  See review-plan README.md for full troubleshooting details."
         echo ""
         echo "═══════════════════════════════════════════════════════════"
@@ -588,17 +592,18 @@ if [ "$HTTP_CODE" -ne 200 ]; then
             echo "  Endpoint: $API_ENDPOINT"
             if [[ "$API_ENDPOINT" == *"api.anthropic.com"* ]]; then
                 echo "  → api.anthropic.com doesn't support /v1/chat/completions."
-                echo "    Point ANTHROPIC_BASE_URL to a LiteLLM proxy instead."
+                echo "    export ANTHROPIC_BASE_URL='http://localhost:4000'  # LiteLLM proxy"
             else
                 echo "  Available models: Azure/gpt-4o, GCP/gemini-2.5-flash, aws/claude-opus-4-6"
             fi
-            echo "  See review-plan README.md for troubleshooting."
+            echo "  See review-plan README.md for full troubleshooting."
             ;;
         400)
             echo "Bad request - the API rejected the request format."
             if [[ "$API_ENDPOINT" == *"anthropic.com"* ]]; then
-                echo "  → Wrong API format for Anthropic. Use a LiteLLM proxy instead."
-                echo "    See review-plan README.md for troubleshooting."
+                echo "  → Wrong API format for Anthropic. Use a LiteLLM proxy instead:"
+                echo "    export ANTHROPIC_BASE_URL='http://localhost:4000'"
+                echo "    See review-plan README.md for full troubleshooting."
             fi
             ;;
         429)

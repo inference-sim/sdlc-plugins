@@ -25,7 +25,13 @@ allowed-tools:
 
 End-to-end guided hypothesis experimentation with a deterministic 6-screen flow and background agent dispatch.
 
-**CRITICAL:** This skill MUST present the same UI flow every time. The user experience must be predictable and consistent.
+**CRITICAL:** This skill MUST present the same UI flow every time. Determinism is required because users build muscle memory around the screen sequence, documentation references specific screen numbers, and background agents expect a fixed configuration structure from each screen.
+
+## Terminology
+
+- **Background context** — domain knowledge and architectural information used to generate hypotheses
+- **Problem context file** — the file at `[PROJECT_ROOT]/hypotheses/problem-context.md` that stores background context
+- **Background sources** — user-selected source types (repos, papers, web search) used to generate the problem context file
 
 **CRITICAL: NEVER STOP BETWEEN SCREENS.** After the user answers a config screen, immediately proceed to the next screen. Do NOT:
 - Summarize what the user just selected
@@ -35,20 +41,24 @@ End-to-end guided hypothesis experimentation with a deterministic 6-screen flow 
 - Ask for confirmation or approval to continue
 - Add any commentary between screens
 
-The ONLY time the flow pauses is when an AskUserQuestion is presented. Between screens, the transition is instant and silent. Screen 1 answer → immediately run Step 0 + background processing + Screen 2 (Generation). And so on.
+The ONLY time the flow pauses is when an AskUserQuestion is presented. Between screens, the transition is instant and silent. Screen 1 answer → immediately run project detection + background processing + Screen 2 (Generation). And so on.
 
 ## Fixed Screen Sequence
 
+<!-- If screen count changes, update the count in the heading above Screen sequence table AND in the intro line. -->
+
 Every invocation presents exactly these screens in this order:
 
-| Screen | Headers | Type | Purpose | Never Skip |
-|--------|---------|------|---------|------------|
-| 1 | "Project" + "Focus" + "Count" + "Background" | Config (4 questions) | Setup: project, focus area, hypothesis count, background sources | Always show |
-| 2 | — | Dashboard | Hypothesis generation progress | Always show |
-| 3 | "Select" + "Execution" | Config (2 questions) | Pick hypotheses to test + execution mode | Always show |
-| 4 | "Approve" | Dashboard + Config | Scaffold experiments (dashboard), then batch approve | Always show |
-| 5 | — | Dashboard | Experiment progress (background agents) | Always show |
-| 6 | "Commit" | Config | Commit results | Always show |
+| Screen | Headers | Type | Purpose |
+|--------|---------|------|---------|
+| 1 | "Project" + "Focus" + "Count" + "Background" | Config (4 questions) | Setup: project, focus area, hypothesis count, background sources |
+| 2 | — | Dashboard | Hypothesis generation progress |
+| 3 | "Select" + "Execution" | Config (2 questions) | Pick hypotheses to test + execution mode |
+| 4 | "Approve" | Dashboard + Config | Scaffold experiments (dashboard), then batch approve |
+| 5 | — | Dashboard | Experiment progress (background agents) |
+| 6 | "Commit" | Config | Commit results |
+
+No screens are ever skipped. All screens are shown regardless of detected state.
 
 **Navigation:** Config screens (1, 3) use multi-question AskUserQuestion calls so the user can navigate left/right between questions before submitting.
 
@@ -85,6 +95,18 @@ After 5 minutes + 3 retries, mark as `Failed` with reason "experiment timeout".
 ### Invalid project path
 If the user-provided path doesn't exist or isn't a directory: show error, re-show Screen 1.
 
+### Background agent crash or timeout
+Each background agent has a 5-minute timeout. On timeout or crash: mark the task as `Failed`, log the error from TaskOutput, and continue the dashboard. Failed agents do not block other agents or subsequent screens.
+
+### Agent returns unparseable output
+If an agent doesn't return the expected format (e.g., missing `HYPOTHESIS:` or `VERDICT:` line): mark as `Failed` with reason "invalid output format". The dashboard continues with successful results.
+
+### Empty project (no source files)
+If `[PROJECT_ROOT]` contains no recognized source files after scanning: show "No source files found at [PROJECT_ROOT]." Re-show Screen 1.
+
+### Malformed problem-context.md
+If the problem context file exists but is empty or unreadable: log a warning and proceed without background context. Do not fail the flow.
+
 ---
 
 ## Pre-Screen Detection (silent, before Screen 1)
@@ -102,7 +124,7 @@ Store:
 
 ---
 
-## Screen 1: Setup (SCREEN 1 — Always Show)
+## Screen 1: Setup
 
 Present all four config questions in a **single AskUserQuestion** so the user can navigate left/right between them:
 
@@ -175,11 +197,11 @@ AskUserQuestion:
 5. Store count as `[COUNT]`.
 6. Store background selections as `[BACKGROUND_SELECTIONS]`.
 
-**→ Immediately proceed to Step 0 + background processing + Screen 2 (Generation). No commentary.**
+**→ Immediately proceed to project detection + background processing + Screen 2 (Generation). No commentary.**
 
 ---
 
-## Step 0: Detect Project Context (silent, after Screen 1)
+## Post-Screen 1: Detect Project Context (silent)
 
 After the user submits Screen 1, silently gather context from `[PROJECT_ROOT]`:
 
@@ -242,7 +264,7 @@ Wait for completion. The file is now at `[PROJECT_ROOT]/hypotheses/problem-conte
 
 ---
 
-## Screen 2: Generation Dashboard (SCREEN 2 — Always Show)
+## Screen 2: Generation Dashboard
 
 **CRITICAL: This entire screen is fully autonomous. Do NOT pause, ask questions, show intermediate results, or wait for user input. Generate ALL [COUNT] hypotheses in parallel using background agents. The user sees progress only via task updates — never stop to discuss, confirm, or display individual results.**
 
@@ -312,9 +334,9 @@ Collect results using `TaskOutput`. As each agent completes:
 
 ---
 
-## Screen 3: Select & Execute (SCREEN 3 — Always Show)
+## Screen 3: Select & Execute
 
-Combine `[NEW_HYPOTHESES]` with `[PENDING_HYPOTHESES]` from Step 0.
+Combine `[NEW_HYPOTHESES]` with `[PENDING_HYPOTHESES]` from the post-Screen 1 detection.
 
 Present both questions in a **single AskUserQuestion** so the user can navigate left/right between them:
 
@@ -352,7 +374,7 @@ Store selections as `[SELECTED]` and execution mode as `[EXEC_MODE]`.
 
 ---
 
-## Screen 4: Approve Experiment Designs (SCREEN 4 — Always Show)
+## Screen 4: Approve Experiment Designs
 
 ### Phase 1: Scaffolding Dashboard
 
@@ -414,7 +436,7 @@ Store approved hypotheses as `[APPROVED]`.
 
 ---
 
-## Screen 5: Testing Dashboard (SCREEN 5 — Always Show)
+## Screen 5: Testing Dashboard
 
 **Create one task per approved hypothesis:**
 
@@ -488,7 +510,7 @@ Store all verdicts as `[RESULTS]`.
 
 ---
 
-## Screen 6: Commit (SCREEN 6 — Always Show)
+## Screen 6: Commit
 
 ```
 AskUserQuestion:
