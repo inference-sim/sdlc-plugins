@@ -15,7 +15,7 @@ Generate a single testable, falsifiable hypothesis about the project.
 ## Invocation
 
 ```
-Skill(_formulate-hypothesis "<project_root>" "<focus_area>" "<existing_claims>" "<language>")
+Skill(_formulate-hypothesis "<project_root>" "<focus_area>" "<existing_claims>" "<language>" "<background_context>")
 ```
 
 Arguments:
@@ -23,6 +23,7 @@ Arguments:
 - `focus_area` — `entire project`, `performance`, `correctness`, or a specific component name
 - `existing_claims` — comma-separated list of already-generated claims (empty string if none)
 - `language` — detected project language: `go`, `python`, `node`, or `other`
+- `background_context` (optional) — background context gathered from repos, papers, and other sources. Empty string if none provided.
 
 ## Process
 
@@ -31,6 +32,10 @@ Arguments:
    - `Glob("[PROJECT_ROOT]/**/test*/**", "[PROJECT_ROOT]/**/*_test*", "[PROJECT_ROOT]/**/*test*.*")` — what IS tested (find gaps)
    - `Grep` source files under `[PROJECT_ROOT]` — complex logic, error paths, config options
    - Identify recently changed behavior from source
+1b. **Review background context** (if `[BACKGROUND_CONTEXT]` is non-empty):
+    - Read the provided background for domain knowledge, architectural patterns, and known issues
+    - Use background insights to identify more targeted testable gaps
+    - Cross-reference background claims with what the project actually implements
 2. **Identify a testable gap**:
    - Performance claims with no benchmark
    - Edge cases in core logic (boundary values, empty inputs, error paths)
