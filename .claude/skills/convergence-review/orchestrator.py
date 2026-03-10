@@ -193,6 +193,88 @@ def _human_print(msg: str) -> None:
     print(msg, file=sys.stderr, flush=True)
 
 
+def build_prior_round_context(
+    assessment: Assessment,
+    fix_result: FixResult | None,
+) -> str:
+    """Build a prior-round context section for reviewer prompts.
+
+    Summarizes dismissed findings and fixed findings from the prior round
+    so reviewers can focus on genuinely new issues rather than re-raising
+    themes that have already been addressed or evaluated.
+    """
+    lines = [
+        "## Prior Round Context",
+        "",
+        "The following findings were evaluated in a prior review round. "
+        "Use this context to focus your review on genuinely NEW issues.",
+        "",
+    ]
+
+    # Dismissed findings
+    dismissed = assessment.dismissed
+    if dismissed:
+        lines.append("### Dismissed (not actionable)")
+        lines.append("")
+        lines.append(
+            "These were reviewed and determined to be not actionable. "
+            "Do NOT re-raise these unless you have a SPECIFIC counter-argument "
+            "that addresses the dismissal rationale."
+        )
+        lines.append("")
+        for d in dismissed:
+            reason = d.dismissal_reason or "no rationale provided"
+            desc = d.description[:150]
+            lines.append(f"- {desc} — *Dismissed: {reason}*")
+        lines.append("")
+
+    # Fixed findings
+    fixed_descriptions = []
+    if fix_result and fix_result.fixes_applied:
+        for f in fix_result.fixes_applied:
+            desc = f.get("description", f.get("id", ""))[:150]
+            if desc:
+                fixed_descriptions.append(desc)
+
+    if fixed_descriptions:
+        lines.append("### Fixed (already addressed in artifact)")
+        lines.append("")
+        lines.append(
+            "These issues were fixed in the artifact you are now reading. "
+            "Do NOT re-raise these unless the fix is clearly incomplete "
+            "or introduced a new problem."
+        )
+        lines.append("")
+        for desc in fixed_descriptions:
+            lines.append(f"- {desc}")
+        lines.append("")
+
+    # Skipped findings (fixer chose not to fix)
+    skipped_descriptions = []
+    if fix_result and fix_result.fixes_skipped:
+        for f in fix_result.fixes_skipped:
+            desc = f.get("description", f.get("id", ""))[:150]
+            rationale = f.get("rationale", "")[:100]
+            if desc:
+                skipped_descriptions.append((desc, rationale))
+
+    if skipped_descriptions:
+        lines.append("### Skipped (fixer declined to fix)")
+        lines.append("")
+        lines.append(
+            "These were identified as important but the fixer chose not to address them. "
+            "If you believe these are still valid issues, re-raise them with "
+            "a clear argument for why they should be fixed."
+        )
+        lines.append("")
+        for desc, rationale in skipped_descriptions:
+            skip_note = f" — *Skip rationale: {rationale}*" if rationale else ""
+            lines.append(f"- {desc}{skip_note}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 async def run_round(
     client: AsyncOpenAI,
     args: argparse.Namespace,
@@ -201,6 +283,7 @@ async def run_round(
     perspectives: list,
     state_dir: Path,
     summary: SummaryWriter,
+    prior_round_context: str | None = None,
 ) -> RoundResult:
     """Execute one convergence round: review → assess → fix."""
     round_start = time.monotonic()
@@ -230,6 +313,7 @@ async def run_round(
         args.reviewer_timeout,
         round_num,
         state_dir,
+        prior_round_context,
     )
 
     total_raw = sum(len(o.findings) for o in reviewer_outputs)
@@ -518,11 +602,13 @@ async def main(argv: list[str] | None = None) -> int:
     fixes_history: list[int] = []  # fixes applied per round
     recurring_history: list[int] = []  # recurring finding count per round
     persistent_themes: list[dict] = []  # accumulated escalated themes for summary
+    prior_round_context: str | None = None  # fed to reviewers from round 2+
 
     try:
         for round_num in range(1, args.max_rounds + 1):
             result = await run_round(
-                client, args, round_num, artifact_content, perspectives, state_dir, summary
+                client, args, round_num, artifact_content, perspectives, state_dir, summary,
+                prior_round_context,
             )
 
             if result.status == "converged":
@@ -640,6 +726,16 @@ async def main(argv: list[str] | None = None) -> int:
                             f"Use --force to override."
                         )
                     return 1
+
+            # Build prior-round context for next round's reviewers
+            if result.assessment:
+                prior_round_context = build_prior_round_context(
+                    result.assessment, result.fix_result
+                )
+                logger.info(
+                    "Built prior-round context for round %d (%d chars)",
+                    round_num + 1, len(prior_round_context),
+                )
 
             # Reload artifact content for next round (fixes may have changed it)
             if result.status == "fixed":

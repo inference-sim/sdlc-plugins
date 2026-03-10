@@ -55,7 +55,11 @@ If you find no issues, return: {"perspective": "<ID>", "findings": []}
 """
 
 
-def _inject_artifact(prompt: str, artifact_content: str) -> str:
+def _inject_artifact(
+    prompt: str,
+    artifact_content: str,
+    prior_round_context: str | None = None,
+) -> str:
     """Replace placeholder patterns in prompt with actual artifact content,
     and append structured output format instructions.
 
@@ -79,9 +83,15 @@ def _inject_artifact(prompt: str, artifact_content: str) -> str:
         )
         filled = filled.replace("ARTIFACT_PATH", "")
 
+    # Append prior round context if available (round 2+)
+    context_section = ""
+    if prior_round_context:
+        context_section = "\n\n" + prior_round_context
+
     # Append artifact content and output format
     return (
         filled.rstrip()
+        + context_section
         + "\n\n## Artifact Content\n\n"
         + artifact_content
         + _OUTPUT_FORMAT_SUFFIX
@@ -330,12 +340,15 @@ async def run_reviewer(
     artifact_content: str,
     timeout: float,
     round_num: int,
+    prior_round_context: str | None = None,
 ) -> ReviewerOutput:
     """Run a single reviewer perspective via OpenAI chat completion."""
     start = time.monotonic()
 
     # Inject artifact content into prompt placeholders
-    prompt_with_artifact = _inject_artifact(perspective.prompt, artifact_content)
+    prompt_with_artifact = _inject_artifact(
+        perspective.prompt, artifact_content, prior_round_context
+    )
 
     for attempt in range(_MAX_RETRIES):
         try:
@@ -438,10 +451,14 @@ async def run_all_reviewers(
     timeout: float,
     round_num: int,
     state_dir: Path,
+    prior_round_context: str | None = None,
 ) -> list[ReviewerOutput]:
     """Dispatch all reviewers in parallel and collect results."""
     tasks = [
-        run_reviewer(client, model, p, artifact_content, timeout, round_num)
+        run_reviewer(
+            client, model, p, artifact_content, timeout, round_num,
+            prior_round_context,
+        )
         for p in perspectives
     ]
     raw_results = await asyncio.gather(*tasks, return_exceptions=True)

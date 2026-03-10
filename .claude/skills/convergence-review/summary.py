@@ -157,7 +157,7 @@ class SummaryWriter:
         assessment: Assessment | None,
         fix_result: FixResult | None,
     ) -> None:
-        """Append a compact round summary with cross-round status breakdown."""
+        """Append a compact round summary showing actionable count and delta."""
         if not assessment:
             return
 
@@ -165,42 +165,54 @@ class SummaryWriter:
             f for f in assessment.assessed_findings
             if f.severity in ("CRITICAL", "IMPORTANT")
         ]
-        if not ci:
-            self._append("  > **Summary**: 0 C+I — converged\n\n")
+
+        non_actionable = {"recurring-fixed", "recurring-escalate"}
+        actionable_count = sum(1 for f in ci if f.cross_round_status not in non_actionable)
+
+        if actionable_count == 0:
+            self._append("  > **Actionable: 0** — converged\n\n")
             return
 
-        c_count = sum(1 for f in ci if f.severity == "CRITICAL")
-        i_count = sum(1 for f in ci if f.severity == "IMPORTANT")
+        # Compute delta from prior round
+        prev_actionable = None
+        if self._round_history:
+            prev_actionable = self._round_history[-1].get("actionable")
 
-        # Cross-round status breakdown
+        # Headline: actionable count with delta
+        headline = f"  > **Actionable: {actionable_count}**"
+        if prev_actionable is not None:
+            delta = actionable_count - prev_actionable
+            arrow = "↓" if delta < 0 else ("↑" if delta > 0 else "→")
+            headline += f" ({arrow}{abs(delta)} from round {self._round_history[-1]['round']})"
+        headline += "\n"
+
+        # Breakdown by cross-round status
         from collections import Counter
         statuses = Counter(f.cross_round_status for f in ci)
-        status_parts = []
-        for s in ("novel", "regression", "recurring-skipped", "recurring-fixed", "recurring-escalate"):
+        breakdown_parts = []
+        for s, label in [
+            ("novel", "novel"),
+            ("regression", "regression"),
+            ("recurring-skipped", "recurring-skipped"),
+        ]:
             if statuses.get(s, 0) > 0:
-                status_parts.append(f"{statuses[s]} {s}")
+                breakdown_parts.append(f"{statuses[s]} {label}")
+        breakdown = f"  > Breakdown: {', '.join(breakdown_parts)}\n" if breakdown_parts else ""
 
-        # Actionable count
-        non_actionable = {"recurring-fixed", "recurring-escalate"}
-        actionable = [f for f in ci if f.cross_round_status not in non_actionable]
-        filtered = len(ci) - len(actionable)
+        # Filtered count
+        filtered = sum(1 for f in ci if f.cross_round_status in non_actionable)
+        filtered_line = f"  > Filtered: {filtered} recurring-fixed/escalated\n" if filtered > 0 else ""
 
-        lines = [f"  > **Summary**: {len(ci)} C+I ({c_count}C, {i_count}I)"]
-        if status_parts:
-            lines[0] += f" — {', '.join(status_parts)}"
-        lines.append(f"\n  > **Actionable**: {len(actionable)}")
-        if filtered > 0:
-            lines[-1] += f" ({filtered} filtered as recurring-fixed/escalated)"
-
+        # Fixes
+        fix_line = ""
         if fix_result and not fix_result.error:
             applied = len(fix_result.fixes_applied)
             skipped = len(fix_result.fixes_skipped)
-            lines.append(f"\n  > **Fixes**: {applied} applied, {skipped} skipped")
+            fix_line = f"  > Fixes: {applied} applied, {skipped} skipped\n"
         elif fix_result and fix_result.error:
-            lines.append(f"\n  > **Fixes**: FAILED — {fix_result.error}")
+            fix_line = f"  > Fixes: FAILED — {fix_result.error}\n"
 
-        lines.append("\n\n")
-        self._append("".join(lines))
+        self._append(f"{headline}{breakdown}{filtered_line}{fix_line}\n")
 
     def write_recurring(self, recurring: int, total: int, escalated: int = 0) -> None:
         """Append recurring findings note after assessment."""
@@ -224,30 +236,47 @@ class SummaryWriter:
             row["important"] = s.get("important", 0)
             row["suggestion"] = s.get("suggestion", 0)
             row["dismissed"] = s.get("dismissed", 0)
+
+            # Cross-round status breakdown from assessed findings
+            from collections import Counter
+            ci = [f for f in assessment.assessed_findings if f.severity in ("CRITICAL", "IMPORTANT")]
+            statuses = Counter(f.cross_round_status for f in ci)
+            non_actionable = {"recurring-fixed", "recurring-escalate"}
+            row["novel"] = statuses.get("novel", 0)
+            row["regression"] = statuses.get("regression", 0)
+            row["re_skip"] = statuses.get("recurring-skipped", 0)
+            row["re_fixed"] = statuses.get("recurring-fixed", 0)
+            row["escalated"] = statuses.get("recurring-escalate", 0)
+            row["actionable"] = sum(1 for f in ci if f.cross_round_status not in non_actionable)
         if fix_result and not fix_result.error:
             row["applied"] = len(fix_result.fixes_applied)
             row["skipped"] = len(fix_result.fixes_skipped)
         self._round_history.append(row)
 
     def _write_history_table(self) -> None:
-        """Append a markdown summary table of all rounds."""
+        """Append a progress table showing convergence trajectory across rounds."""
         if not self._round_history:
             return
         lines = [
-            "\n## Round History\n\n",
-            "| Round | CRITICAL | IMPORTANT | SUGGESTION | Dismissed | Applied | Skipped | C+I Remaining |\n",
-            "|------:|---------:|----------:|-----------:|----------:|--------:|--------:|--------------:|\n",
+            "\n## Progress\n\n",
+            "| Round | Actionable | Novel | Regress | Re-skip | Re-fixed | Escalated | Fixed | Skipped |\n",
+            "|------:|-----------:|------:|--------:|--------:|---------:|----------:|------:|--------:|\n",
         ]
         for row in self._round_history:
-            c = row.get("critical", "-")
-            i = row.get("important", "-")
-            s = row.get("suggestion", "-")
-            d = row.get("dismissed", "-")
+            act = row.get("actionable", "-")
+            nov = row.get("novel", "-")
+            reg = row.get("regression", "-")
+            rsk = row.get("re_skip", "-")
+            rfx = row.get("re_fixed", "-")
+            esc = row.get("escalated", "-")
             a = row.get("applied", "-")
             sk = row.get("skipped", "-")
-            ci = (c + i) if isinstance(c, int) and isinstance(i, int) else "-"
+            # Round 1 has no cross-round data; show "—" for inapplicable columns
+            if row["round"] == 1:
+                rfx = "—"
+                esc = "—"
             lines.append(
-                f"| {row['round']} | {c} | {i} | {s} | {d} | {a} | {sk} | {ci} |\n"
+                f"| {row['round']} | {act} | {nov} | {reg} | {rsk} | {rfx} | {esc} | {a} | {sk} |\n"
             )
         lines.append("\n")
         self._append("".join(lines))
@@ -276,7 +305,7 @@ class SummaryWriter:
         self._append(
             f"## Result: CONVERGED — `{self._ts()}`\n\n"
             f"Converged in {round_num} round(s) ({total_elapsed:.0f}s total). "
-            f"0 CRITICAL, 0 IMPORTANT remaining.\n"
+            f"0 actionable findings remaining.\n"
         )
         self._write_history_table()
 

@@ -15,7 +15,7 @@ logger = logging.getLogger("convergence.prompts")
 # Section letter to heading prefix mapping per gate
 _SECTION_MAP: dict[str, dict[str, str]] = {
     "design-prompts.md": {"A": "DD", "B": "MP", "C": "GDD", "D": "CMP", "E": "GMP"},
-    "pr-prompts.md": {"A": "PP", "B": "PC", "C": "XPP"},
+    "pr-prompts.md": {"A": "PP", "B": "PC", "C": "XPP", "D": "XPC"},
     "hypothesis-experiment/review-prompts.md": {"A": "DR", "B": "CR", "C": "FR"},
 }
 

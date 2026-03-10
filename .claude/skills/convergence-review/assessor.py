@@ -107,6 +107,7 @@ _GATE_DESCRIPTIONS = {
     "pr-plan": "PR micro plan review. Artifact should be a single-PR implementation plan with TDD tasks and behavioral contracts.",
     "x-pr-plan": "Cross-system PR micro plan review. Artifact should be a single-PR implementation plan for transferring logic between two codebases, with signal mappings, schema contracts, and cross-system integration steps.",
     "pr-code": "PR code review. Artifact is a git diff of code changes.",
+    "x-pr-code": "Cross-system PR code review. Artifact is a git diff of code changes for a cross-system transfer pipeline (sim2real). Review focuses on cross-system contract integrity, artifact consistency, prompt template quality, and Python CLI + Go harness code correctness.",
     "h-design": "Hypothesis experiment design review. Artifact should be a hypothesis sentence, classification, and experiment design.",
     "h-code": "Hypothesis experiment code review. Artifact should be run.sh and analyze.py scripts.",
     "h-findings": "Hypothesis FINDINGS.md review. Artifact should be experimental results with analysis.",

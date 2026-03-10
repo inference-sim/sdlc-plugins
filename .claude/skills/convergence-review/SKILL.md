@@ -1,6 +1,6 @@
 ---
 name: convergence-review
-description: Dispatch parallel review perspectives and enforce convergence (zero CRITICAL + zero IMPORTANT). Supports gate types — design doc (8), macro plan (8), PR plan (10), cross-system PR plan (10), PR code (10), hypothesis design (5), hypothesis code (5), hypothesis FINDINGS (10).
+description: Dispatch parallel review perspectives and enforce convergence (zero CRITICAL + zero IMPORTANT). Supports gate types — design doc (8), macro plan (8), PR plan (10), cross-system PR plan (5), PR code (10), cross-system PR code (4), hypothesis design (5), hypothesis code (5), hypothesis FINDINGS (10).
 argument-hint: <gate-type> [artifact-path] [--reviewer-model X] [--fixer-model Y]
 ---
 
@@ -17,8 +17,9 @@ Dispatch parallel review perspectives for gate **$0** and enforce convergence.
 | `x-macro-plan` | 8 | Cross-system macro plan at `$1` | [design-prompts.md](design-prompts.md) Section D |
 | `g-macro-plan` | 8 | Generalized macro plan at `$1` | [design-prompts.md](design-prompts.md) Section E |
 | `pr-plan` | 10 | Micro plan at `$1` | [pr-prompts.md](pr-prompts.md) Section A |
-| `x-pr-plan` | 10 | Cross-system micro plan at `$1` | [pr-prompts.md](pr-prompts.md) Section C |
+| `x-pr-plan` | 5 | Cross-system micro plan at `$1` | [pr-prompts.md](pr-prompts.md) Section C |
 | `pr-code` | 10 | Current git diff | [pr-prompts.md](pr-prompts.md) Section B |
+| `x-pr-code` | 4 | Current git diff (cross-system) | [pr-prompts.md](pr-prompts.md) Section D |
 | `h-design` | 5 | Design doc at `$1` | `hypothesis-experiment/review-prompts.md` Section A |
 | `h-code` | 5 | `run.sh` + `analyze.py` at `$1` | `hypothesis-experiment/review-prompts.md` Section B |
 | `h-findings` | 10 | FINDINGS.md at `$1` | `hypothesis-experiment/review-prompts.md` Section C |
@@ -166,7 +167,8 @@ If `--force` is not set, the orchestrator monitors finding counts over a sliding
 ```
 /convergence-review pr-plan docs/plans/pr<N>-<name>-plan.md
 /convergence-review x-pr-plan docs/plans/pr<N>-<name>-plan.md   # cross-system transfer plans
-/convergence-review pr-code
+/convergence-review pr-code                                     # inference-sim code review
+/convergence-review x-pr-code                                   # cross-system (sim2real) code review
 ```
 
 ### From hypothesis-experiment skill (Steps 2, 5, and 8)

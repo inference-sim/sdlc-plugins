@@ -2,7 +2,7 @@
 
 Reference file for the convergence-review skill. Contains exact prompts for PR review perspectives across plan review, code review, and cross-system plan review gates.
 
-**Canonical source:** `docs/contributing/pr-workflow.md` (v3.0). If prompts here diverge from pr-workflow.md, the process doc is authoritative.
+**Canonical source:** `docs/contributing/pr-workflow.md`. If prompts here diverge from pr-workflow.md, the process doc is authoritative. Sections A and B use inference-sim perspectives (v3.0). Section C uses sim2real perspectives (v1.0).
 
 **Dispatch pattern:** Launch each perspective as a parallel Task agent. **Do NOT paste the artifact content into the prompt** — this causes output generation to hang when dispatching 8+ agents in parallel. Instead, tell agents to read the file themselves:
 ```
@@ -355,14 +355,38 @@ Report: (1) numbered list of findings with severity, (2) total CRITICAL count, (
 
 ---
 
-## Section C: Cross-System PR Plan Review (10 perspectives) — x-pr-plan
+## Section C: Cross-System PR Plan Review (5 perspectives) — x-pr-plan
 
-For plans that transfer logic between two codebases (e.g., sim → production scheduler). Replaces domain-specific DES/vLLM perspectives with cross-system transfer concerns.
+For sim2real cross-system transfer PRs. 5 perspectives aligned with `docs/contributing/pr-workflow.md` (v1.0). Not all perspectives are used for every PR category — see the pr-workflow's Perspective Assignment table.
 
-### XPP-1: Substance & Design
+**Canonical source:** `docs/contributing/pr-workflow.md` (v1.0). If prompts here diverge from pr-workflow.md, the process doc is authoritative.
+
+### XPP-1: Cross-System Contract Integrity
 
 ```
-Review this cross-system implementation plan for substance: Are the behavioral contracts logically sound? Do the signal mappings preserve semantics across the source and target systems? Are there unit mismatches, type incompatibilities, or abstraction-level confusions between the two codebases? Could the design actually achieve what the contracts promise? Check formulas, thresholds, and mapping fidelity from first principles.
+Review this plan for cross-system contract integrity. Check:
+(1) Do artifacts correctly describe the APIs in submodules? Read the actual submodule source files referenced in the plan and compare API signatures, types, and method names against what the plan documents.
+(2) Are commit pins current? Run `git submodule status` and compare against any commit hashes referenced in the plan or mapping artifact.
+(3) Do workspace artifact schemas chain correctly between stages? For each workspace artifact (algorithm_summary.json, signal_coverage.json, validation_results.json), verify that the fields written by the producing stage match the fields expected by consuming stages.
+(4) Signal mapping accuracy: does each signal name in the mapping artifact match the actual field name in both the source system (inference-sim) and target system (llm-d-inference-scheduler)? Check for semantic drift, type mismatches (int vs float, absolute vs relative), unit mismatches (ms vs s), and temporal mismatches (point-in-time vs rolling average).
+(5) Plugin interface compliance: do references to the target system's scorer interface, registration pattern, and config format match the actual code in the submodule?
+
+First, read the plan file at ARTIFACT_PATH using the Read tool. Then read the relevant submodule source files to verify claims.
+
+Rate each finding as CRITICAL, IMPORTANT, or SUGGESTION.
+Report: (1) numbered list of findings with severity, (2) total CRITICAL count, (3) total IMPORTANT count.
+```
+
+### XPP-2: Artifact Completeness & Consistency
+
+```
+Review this plan for artifact completeness and cross-artifact consistency. Check:
+(1) Are all required sections present in each artifact the plan creates or modifies? (Mapping artifact: signal table, types, metric paths, staleness windows, fidelity ratings, commit pin. Scorer template: all 8 sections per design doc. Prompt templates: prerequisites, validation steps, halt conditions, expected outputs.)
+(2) Do signal names match exactly across all artifacts? Grep for each signal name in the mapping artifact, JSON schemas, prompt templates, CLI code, and README. Any spelling or casing mismatch is a bug.
+(3) Do field names match across workspace artifact schemas and the code that reads/writes them?
+(4) Do file paths referenced in the plan exist or will be created by a preceding task? Flag any reference to a file that doesn't exist and isn't created by an earlier task.
+(5) Is the deviation log current? If the plan deviates from the macro plan, is each deviation documented with rationale?
+(6) Dead artifact check: is every file created by this plan consumed by a test, a later PR, or the pipeline runtime? If a file has no consumer, flag it.
 
 First, read the plan file at ARTIFACT_PATH using the Read tool.
 
@@ -370,10 +394,16 @@ Rate each finding as CRITICAL, IMPORTANT, or SUGGESTION.
 Report: (1) numbered list of findings with severity, (2) total CRITICAL count, (3) total IMPORTANT count.
 ```
 
-### XPP-2: Cross-Document & Macro Plan Consistency
+### XPP-3: Prompt Template Quality
 
 ```
-Does this micro plan's scope match the macro plan it references? Are file paths consistent with the actual codebase (check both source and target repos/submodules)? Does the deviation log account for all differences between the macro plan and this micro plan? Check for stale references to completed PRs, removed files, or renamed APIs in either codebase.
+Review this plan's prompt templates (or plans for prompt templates) for quality and completeness. Check:
+(1) Does each prompt template specify prerequisites — which workspace artifacts must exist before this stage runs, and how to validate them (schema check + file existence)?
+(2) Does each prompt template specify validation steps — how the operator or LLM verifies the stage's output before writing to workspace artifacts?
+(3) Are halt conditions clear and unambiguous? For each condition that should stop the pipeline, is the trigger specific (not "if something looks wrong") and is the action explicit (exit code, error message, user decision options)?
+(4) Are expected outputs fully specified — file names, JSON field names, format constraints?
+(5) Does the prompt reference predecessor artifact checks? Each consuming stage should validate the predecessor artifact's schema before reading.
+(6) Could the prompt cause LLM missteps? Look for ambiguous instructions, missing context, or steps where the LLM would need to guess. Each step should be self-contained enough that a capable LLM can execute it without external knowledge of the codebase.
 
 First, read the plan file at ARTIFACT_PATH using the Read tool.
 
@@ -381,16 +411,16 @@ Rate each finding as CRITICAL, IMPORTANT, or SUGGESTION.
 Report: (1) numbered list of findings with severity, (2) total CRITICAL count, (3) total IMPORTANT count.
 ```
 
-### XPP-3: Cross-System Boundary Verification
+### XPP-4: Code Correctness (Python CLI + Go Harness)
 
 ```
-Does this plan maintain correct boundaries between the source and target systems? Check:
-(1) No direct imports or runtime dependencies between source and target code
-(2) Transfer artifacts (mappings, schemas, extracted code) are self-contained
-(3) The plan doesn't accidentally couple the two systems at build time
-(4) Types are in the right packages for each system's conventions
-(5) The transfer direction is always source → artifact → target, never bidirectional
-(6) CLI tools operate on artifacts only, never directly on source/target internals
+Review this plan's code (Python CLI tools and Go test harness) for correctness. Check:
+(1) Edge cases: empty input files, missing fields in JSON, zero-length signal lists, malformed YAML.
+(2) Error handling: does every CLI command handle all three exit code paths (0 = success, 1 = validation failure, 2 = infrastructure error)? Are errors surfaced with actionable messages, not swallowed?
+(3) JSON output contract: does each CLI command's actual JSON output match the schema documented in the macro plan's Component Model section? Check field names, types, and required vs optional.
+(4) Go harness correctness: compilation against pinned submodule HEAD, test tuple handling, score comparison logic, timeout handling.
+(5) Input validation: CLI argument parsing safety, path traversal prevention in file operations, subprocess invocation safety.
+(6) Resource bounds: no unbounded file reads, no unlimited memory growth, no infinite retry loops without limits.
 
 First, read the plan file at ARTIFACT_PATH using the Read tool.
 
@@ -398,120 +428,108 @@ Rate each finding as CRITICAL, IMPORTANT, or SUGGESTION.
 Report: (1) numbered list of findings with severity, (2) total CRITICAL count, (3) total IMPORTANT count.
 ```
 
-### XPP-4: Codebase Readiness
+### XPP-5: Plan Structural Validation (perform directly, no agent)
 
-```
-We're about to implement this cross-system PR. Review both codebases for readiness. Check:
-- Do the submodules point to the expected branches/commits?
-- Are the source APIs referenced in the plan still present and unchanged?
-- Are the target extension points (plugin interfaces, registries) still compatible?
-- Are there pre-existing bugs, TODO/FIXME items, or stale comments in the modification zones?
-- Are there version conflicts between dependencies?
-- Missing dependencies that need to be installed?
-
-First, read the plan file at ARTIFACT_PATH using the Read tool.
-
-Rate each finding as CRITICAL, IMPORTANT, or SUGGESTION.
-Report: (1) numbered list of findings with severity, (2) total CRITICAL count, (3) total IMPORTANT count.
-```
-
-### XPP-5: Structural Validation (perform directly, no agent)
-
-> **For Claude:** Perform these 4 checks directly. Do NOT dispatch an agent.
+> **For Claude:** Perform these 5 checks directly. Do NOT dispatch an agent.
 
 **Check 1 — Task Dependencies:**
 For each task, verify it can actually start given what comes before it. Trace the dependency chain: what files does each task create/modify? Does any task require a file, type, or artifact that hasn't been created yet?
 
 **Check 2 — Template Completeness:**
-Verify all sections from `docs/contributing/templates/micro-plan.md` are present and non-empty: Header, Part 1 (A-E), Part 2 (F-I), Part 3 (J), Appendix.
+Verify all sections from `docs/contributing/templates/micro-plan-cross-system.md` are present and non-empty: Header, Part 1 (A-E), Part 2 (F-I), Part 3 (J), Appendix.
 
 **Check 3 — Executive Summary Clarity:**
 Read the executive summary as if you're a new team member unfamiliar with either codebase. Is the scope clear without reading the rest? Is the transfer direction obvious?
 
 **Check 4 — Under-specified Tasks:**
-For each task, verify it has complete code. Flag any step an executing agent would need to figure out on its own, especially cross-system integration steps.
+For each task, verify it has complete code or complete artifact content. Flag any step an executing agent would need to figure out on its own, especially cross-system integration steps. Verify each task uses the correct variant (Code Task / Artifact Task / Prompt Template Task).
 
-### XPP-6: Signal Mapping & Abstraction Gap Expert
+**Check 5 — Verification Gate Alignment:**
+Does the plan's verification gate match the PR category from `docs/contributing/pr-workflow.md`? (Artifact → mapping validation + schema check. Pipeline Stage → pytest + go build + prompt check. Validation → pytest + go test + go build. Integration → end-to-end smoke test.)
+
+---
+
+## Section D: Cross-System PR Code Review (4 perspectives) — x-pr-code
+
+For sim2real cross-system transfer PRs — post-implementation code/artifact review. 4 perspectives aligned with `docs/contributing/pr-workflow.md` (v1.0), minus plan structural validation (which only applies to plans, not diffs). Not all perspectives are used for every PR category — see the pr-workflow's Perspective Assignment table.
+
+**Canonical source:** `docs/contributing/pr-workflow.md` (v1.0). If prompts here diverge from pr-workflow.md, the process doc is authoritative.
+
+**Perspective assignment for code review by PR category:**
+
+| Category | XPC-1 Contracts | XPC-2 Artifacts | XPC-3 Prompts | XPC-4 Code |
+|----------|:---:|:---:|:---:|:---:|
+| **Artifact** | X | X | | |
+| **Pipeline Stage** | X | X | X | |
+| **Validation** | X | X | X | X |
+| **Integration** | X | X | X | X |
+
+### XPC-1: Cross-System Contract Integrity
 
 ```
-Review this plan as a signal mapping and abstraction gap expert. Check for:
-- Signal semantic drift: does the same-named signal mean the same thing in source vs target?
-- Fidelity gaps: are any "medium" or "low" fidelity mappings used in critical paths?
-- Missing signals: does the target need information the source doesn't provide?
-- Type mismatches: int vs float, absolute vs relative, per-request vs per-instance
-- Unit mismatches: milliseconds vs seconds, bytes vs blocks, counts vs rates
-- Temporal mismatches: point-in-time snapshots vs rolling averages vs cumulative counters
-- Default value assumptions when a signal is unavailable in the target
+Review this diff for cross-system contract integrity. Check:
+(1) Do any changes to artifacts (mapping docs, schemas, README) still correctly describe the APIs in submodules? Read the actual submodule source files and compare API signatures, types, and method names against what the changed artifacts document.
+(2) Are commit pins still current? If the diff modifies files that reference submodule commit hashes, run `git submodule status` and verify they match.
+(3) Do workspace artifact schema changes maintain the chain? If a schema field was added, renamed, or removed, verify that both the producing stage and all consuming stages are updated consistently.
+(4) Signal mapping accuracy: if the diff touches signal names in any file (mapping artifact, schemas, CLI code, prompts), verify the name matches the actual field in both inference-sim and llm-d-inference-scheduler submodules.
+(5) Plugin interface compliance: if the diff touches scorer template or generated code patterns, verify they still match the target system's actual interface.
 
-First, read the plan file at ARTIFACT_PATH using the Read tool.
+First, run `git diff` using the Bash tool to see the current code changes. Then read relevant submodule source files to verify claims.
 
 Rate each finding as CRITICAL, IMPORTANT, or SUGGESTION.
 Report: (1) numbered list of findings with severity, (2) total CRITICAL count, (3) total IMPORTANT count.
 ```
 
-### XPP-7: Target System Integration Expert
+### XPC-2: Artifact Completeness & Consistency
 
 ```
-Review this plan as an expert in the target system's architecture and plugin model. Check for:
-- Plugin interface compliance (method signatures, return types, lifecycle)
-- Registration and factory pattern correctness
-- Configuration and parameter passing conventions
-- Error handling conventions in the target system
-- Performance expectations and hot-path constraints in the target
-- Breaking changes to existing target system behavior
+Review this diff for artifact completeness and cross-artifact consistency. Check:
+(1) If the diff adds or modifies an artifact, are all required sections present? (Mapping artifact: signal table, types, metric paths, staleness windows, fidelity ratings, commit pin. Scorer template: all 8 sections per design doc. Prompt templates: prerequisites, validation steps, halt conditions, expected outputs.)
+(2) Do signal names match exactly across all files touched by this diff? Grep for each signal name in the mapping artifact, JSON schemas, prompt templates, CLI code, and README. Any spelling or casing mismatch is a bug.
+(3) Do field names in changed JSON schemas match the code that reads/writes those fields?
+(4) Do file paths referenced in changed documents actually exist in the repository?
+(5) Dead artifact check: does this diff create any file that has no consumer (no test reads it, no later stage uses it, no pipeline runtime depends on it)?
 
-First, read the plan file at ARTIFACT_PATH using the Read tool.
+First, run `git diff` using the Bash tool to see the current code changes.
 
 Rate each finding as CRITICAL, IMPORTANT, or SUGGESTION.
 Report: (1) numbered list of findings with severity, (2) total CRITICAL count, (3) total IMPORTANT count.
 ```
 
-### XPP-8: Source System Expert
+### XPC-3: Prompt Template Quality
 
 ```
-Review this plan as an expert in the source system's architecture. Check for:
-- Correct identification of the extractable logic (right boundaries, no missing pieces)
-- Dependencies on source-system runtime state that won't exist in the target
-- Implicit assumptions baked into the source code (event ordering, data freshness, invariants)
-- Source API stability: could the extracted logic break if the source evolves?
-- Whether the extraction captures the complete algorithm or just a fragment
+Review this diff's prompt templates for quality and completeness. Check:
+(1) Does each new or modified prompt template specify prerequisites — which workspace artifacts must exist before this stage runs, and how to validate them (schema check + file existence)?
+(2) Does each prompt specify validation steps — how the operator or LLM verifies the stage's output before writing to workspace artifacts?
+(3) Are halt conditions clear and unambiguous? For each condition that should stop the pipeline, is the trigger specific (not "if something looks wrong") and is the action explicit (exit code, error message, user decision options)?
+(4) Are expected outputs fully specified — file names, JSON field names, format constraints?
+(5) Does the prompt reference predecessor artifact checks? Each consuming stage should validate the predecessor artifact's schema before reading.
+(6) Could the prompt cause LLM missteps? Look for ambiguous instructions, missing context, or steps where the LLM would need to guess.
 
-First, read the plan file at ARTIFACT_PATH using the Read tool.
+If this diff does not touch any prompt templates, report "No prompt templates in diff — 0 CRITICAL, 0 IMPORTANT" and stop.
+
+First, run `git diff` using the Bash tool to see the current code changes.
 
 Rate each finding as CRITICAL, IMPORTANT, or SUGGESTION.
 Report: (1) numbered list of findings with severity, (2) total CRITICAL count, (3) total IMPORTANT count.
 ```
 
-### XPP-9: Schema & Artifact Contract Verification
+### XPC-4: Code Correctness (Python CLI + Go Harness)
 
 ```
-Review this plan's transfer artifacts (JSON schemas, mapping files, extracted code blocks). Check for:
-- Schema completeness: do schemas cover all fields referenced in the plan?
-- Schema correctness: do types, constraints, and required fields match the actual data?
-- Artifact self-containment: can each artifact be validated independently?
-- Versioning: is there a way to detect artifact staleness?
-- Round-trip consistency: if you extract from source and validate against schema, does it pass?
-- Edge cases in schema validation: empty arrays, null values, missing optional fields
+Review this diff's code (Python CLI tools and Go test harness) for correctness. Check:
+(1) Edge cases: empty input files, missing fields in JSON, zero-length signal lists, malformed YAML.
+(2) Error handling: does every CLI command handle all three exit code paths (0 = success, 1 = validation failure, 2 = infrastructure error)? Are errors surfaced with actionable messages, not swallowed?
+(3) JSON output contract: does each CLI command's JSON output match the schema documented in the macro plan? Check field names, types, and required vs optional.
+(4) Go harness correctness: compilation against pinned submodule HEAD, test tuple handling, score comparison logic, timeout handling.
+(5) Input validation: CLI argument parsing safety, path traversal prevention in file operations, subprocess invocation safety.
+(6) Resource bounds: no unbounded file reads, no unlimited memory growth, no infinite retry loops without limits.
+(7) Test quality: do tests verify observable behavior (not internal structure)? Do tests cover the contracts claimed in the plan?
 
-First, read the plan file at ARTIFACT_PATH using the Read tool.
+If this diff does not touch any Python or Go code, report "No code in diff — 0 CRITICAL, 0 IMPORTANT" and stop.
 
-Rate each finding as CRITICAL, IMPORTANT, or SUGGESTION.
-Report: (1) numbered list of findings with severity, (2) total CRITICAL count, (3) total IMPORTANT count.
-```
-
-### XPP-10: Security, Robustness & CLI Quality
-
-```
-Review this plan's CLI tools, scripts, and configuration handling. Check for:
-- Input validation completeness (CLI flags, file paths, JSON/YAML fields)
-- Path traversal or injection risks in file operations
-- Subprocess invocation safety (if any)
-- Degenerate input handling (empty files, malformed JSON, missing fields)
-- Exit code correctness and error message clarity
-- Resource exhaustion vectors (unbounded file reads, unlimited memory growth)
-- Silent data loss paths (overwriting without confirmation, swallowing errors)
-
-First, read the plan file at ARTIFACT_PATH using the Read tool.
+First, run `git diff` using the Bash tool to see the current code changes.
 
 Rate each finding as CRITICAL, IMPORTANT, or SUGGESTION.
 Report: (1) numbered list of findings with severity, (2) total CRITICAL count, (3) total IMPORTANT count.

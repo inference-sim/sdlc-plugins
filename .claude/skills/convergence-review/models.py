@@ -25,6 +25,7 @@ GATE_CONFIGS: MappingProxyType[str, GateConfig] = MappingProxyType({
     "pr-plan": GateConfig("pr-plan", "pr-prompts.md", "A", "file"),
     "x-pr-plan": GateConfig("x-pr-plan", "pr-prompts.md", "C", "file"),
     "pr-code": GateConfig("pr-code", "pr-prompts.md", "B", "git_diff"),
+    "x-pr-code": GateConfig("x-pr-code", "pr-prompts.md", "D", "git_diff"),
     "h-design": GateConfig(
         "h-design", "hypothesis-experiment/review-prompts.md", "A", "file"
     ),
