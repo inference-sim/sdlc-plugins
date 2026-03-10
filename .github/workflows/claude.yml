@@ -27,6 +27,16 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Checkout PR branch (handles forks)
+        if: github.event.issue.pull_request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_HEAD=$(gh pr view ${{ github.event.issue.number }} --json headRefName -q .headRefName)
+          git fetch origin "pull/${{ github.event.issue.number }}/head"
+          git update-ref "refs/remotes/origin/${PR_HEAD}" FETCH_HEAD
+          git checkout -b "${PR_HEAD}" FETCH_HEAD
+
       - uses: anthropics/claude-code-action@v1
         env:
           ANTHROPIC_BASE_URL: ${{ secrets.LITELLM_BASE_URL }}
