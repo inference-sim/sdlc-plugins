@@ -25,12 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-            fetch-depth: 0
-      - name: Check out PR branch
-        if: github.event.issue.pull_request
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh pr checkout ${{ github.event.issue.number }}
+          fetch-depth: 1
 
       - uses: anthropics/claude-code-action@v1
         env:
