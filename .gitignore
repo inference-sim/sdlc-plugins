@@ -16,3 +16,6 @@ __pycache__/
 
 # OS
 .DS_Store
+
+# GitHub Actions self-hosted runner
+actions-runner/
