@@ -30,4 +30,12 @@ jobs:
           ANTHROPIC_BASE_URL: ${{ secrets.LITELLM_BASE_URL }}
         with:
           anthropic_api_key: ${{ secrets.LITELLM_API_KEY }}
-          claude_args: '--model aws/claude-opus-4-6'
+          claude_args: '--model aws/claude-opus-4-6 --allowed-tools Skill Agent'
+          plugin_marketplaces: |
+            https://github.com/anthropics/claude-plugins-official.git
+            https://github.com/obra/superpowers-marketplace.git
+          plugins: |
+            code-review@claude-plugins-official
+            code-simplifier@claude-plugins-official
+            frontend-design@claude-plugins-official
+            superpowers@superpowers-marketplace
