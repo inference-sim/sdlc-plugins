@@ -26,9 +26,5 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: anthropics/claude-code-action@v1
-        env:
-          ANTHROPIC_BASE_URL: ${{ secrets.LITELLM_BASE_URL }}
-          ANTHROPIC_API_KEY: ${{ secrets.LITELLM_API_KEY }}
-          CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: '1'
         with:
           claude_args: '--model aws/claude-opus-4-6'
