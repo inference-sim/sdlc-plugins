@@ -9,8 +9,8 @@ permissions:
 on:
   issue_comment:
     types: [created]
-  pull_request_review_comment:
-    types: [created]
+  pull_request:
+    types: [opened, synchronize] # Run when PR is opened or updated
   issues:
     types: [opened, assigned]
 
@@ -25,17 +25,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
-      - name: Checkout PR branch (handles forks)
-        if: github.event.issue.pull_request
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          PR_HEAD=$(gh pr view ${{ github.event.issue.number }} --json headRefName -q .headRefName)
-          git fetch origin "pull/${{ github.event.issue.number }}/head"
-          git update-ref "refs/remotes/origin/${PR_HEAD}" FETCH_HEAD
-          git checkout -b "${PR_HEAD}" FETCH_HEAD
+    #   - name: Checkout PR branch (handles forks)
+    #     if: github.event.issue.pull_request
+    #     env:
+    #       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    #     run: |
+    #       PR_HEAD=$(gh pr view ${{ github.event.issue.number }} --json headRefName -q .headRefName)
+    #       git fetch origin "pull/${{ github.event.issue.number }}/head"
+    #       git update-ref "refs/remotes/origin/${PR_HEAD}" FETCH_HEAD
+    #       git checkout -b "${PR_HEAD}" FETCH_HEAD
 
       - uses: anthropics/claude-code-action@v1
         env:
