@@ -1,4 +1,4 @@
-name: Claude Trigger (Safe for Fork PRs)
+name: Claude Trigger
 
 on:
   issue_comment:
@@ -11,18 +11,33 @@ permissions:
   pull-requests: read
 
 jobs:
-  detect:
-    if: contains(github.event.comment.body, '@claude')
+  produce-artifact:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Prepare metadata
+      - name: Determine whether to trigger Claude
+        id: check
         run: |
+          if [[ "${{ github.event.comment.body }}" == *"@claude"* ]]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Prepare metadata
+        if: steps.check.outputs.should_run == 'true'
+        run: |
+          echo "should_run=true" > metadata.txt
           echo "pr_number=${{ github.event.issue.number }}" >> metadata.txt
           echo "comment_id=${{ github.event.comment.id }}" >> metadata.txt
           echo "comment_body<<EOF" >> metadata.txt
           echo "${{ github.event.comment.body }}" >> metadata.txt
           echo "EOF" >> metadata.txt
+
+      - name: Prepare noop metadata
+        if: steps.check.outputs.should_run == 'false'
+        run: |
+          echo "should_run=false" > metadata.txt
 
       - name: Upload metadata
         uses: actions/upload-artifact@v4
