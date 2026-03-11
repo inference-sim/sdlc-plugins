@@ -1,0 +1,31 @@
+name: Claude Trigger (Safe for Fork PRs)
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  detect:
+    if: contains(github.event.comment.body, '@claude')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Prepare metadata
+        run: |
+          echo "pr_number=${{ github.event.issue.number }}" >> metadata.txt
+          echo "comment_id=${{ github.event.comment.id }}" >> metadata.txt
+          echo "comment_body<<EOF" >> metadata.txt
+          echo "${{ github.event.comment.body }}" >> metadata.txt
+          echo "EOF" >> metadata.txt
+
+      - name: Upload metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-input
+          path: metadata.txt

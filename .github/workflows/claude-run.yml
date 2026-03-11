@@ -1,0 +1,56 @@
+name: Claude Runner
+
+on:
+  workflow_run:
+    workflows: ["Claude Trigger (Safe for Fork PRs)"]
+    types:
+      - completed
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  run-claude:
+    runs-on: [self-hosted]
+
+    steps:
+      - name: Download metadata
+        uses: actions/download-artifact@v4
+        with:
+          name: claude-input
+
+      - name: Read metadata
+        id: meta
+        run: |
+          pr_number=$(grep pr_number metadata.txt | cut -d= -f2)
+          comment_body=$(awk '/comment_body/{flag=1;next}/EOF/{flag=0}flag' metadata.txt)
+          echo "pr_number=$pr_number" >> $GITHUB_OUTPUT
+          echo "comment_body=$comment_body" >> $GITHUB_OUTPUT
+
+      - uses: actions/checkout@v4
+
+      - name: Run Claude via LiteLLM
+        uses: anthropics/claude-code-action@v1
+        env:
+          ANTHROPIC_BASE_URL: ${{ secrets.LITELLM_BASE_URL }}
+        with:
+          anthropic_api_key: ${{ secrets.LITELLM_API_KEY }}
+          claude_args: "--model aws/claude-opus-4-6 --allowed-tools Skill Agent"
+          prompt: "${{ steps.meta.outputs.comment_body }}"
+
+      - name: Post comment back to PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = ${{ steps.meta.outputs.pr_number }};
+            const body = process.env.CLAUDE_OUTPUT;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr,
+              body: body
+            });
+        env:
+          CLAUDE_OUTPUT: ${{ steps.claude.outputs.completion }}
