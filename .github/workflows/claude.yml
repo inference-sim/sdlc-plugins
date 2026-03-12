@@ -15,11 +15,39 @@ on:
     types: [opened, assigned]
 
 jobs:
-  claude:
+  check-permissions:
     if: |
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'issues' && contains(github.event.issue.body, '@claude'))
+    runs-on: ubuntu-latest
+    outputs:
+      allowed: ${{ steps.check.outputs.allowed }}
+    steps:
+      - name: Check invoker permissions
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: context.actor
+              });
+              const allowed = ['admin', 'write', 'maintain'].includes(data.permission);
+              core.setOutput('allowed', allowed ? 'true' : 'false');
+              if (!allowed) {
+                core.info(`User ${context.actor} has '${data.permission}' permission — skipping.`);
+              }
+            } catch (e) {
+              core.setOutput('allowed', 'false');
+              core.info(`User ${context.actor} is not a collaborator — skipping.`);
+            }
+
+  claude:
+    needs: check-permissions
+    if: needs.check-permissions.outputs.allowed == 'true'
     runs-on: [self-hosted]
     permissions:
       contents: write
@@ -28,20 +56,6 @@ jobs:
       id-token: write
 
     steps:
-      - name: Check invoker permissions
-        if: github.event_name == 'issue_comment'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { data: permLevel } = await github.rest.repos.getCollaboratorPermissionLevel({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              username: context.actor
-            });
-            if (!['admin', 'write', 'maintain'].includes(permLevel.permission)) {
-              core.setFailed(`User ${context.actor} has '${permLevel.permission}' permission; write or higher required.`);
-            }
-
       - name: Resolve PR head for fork PRs
         id: pr-info
         if: github.event_name == 'issue_comment' && github.event.issue.pull_request
