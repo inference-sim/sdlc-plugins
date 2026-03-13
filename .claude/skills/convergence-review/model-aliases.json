@@ -1,0 +1,13 @@
+{
+  "haiku": "aws/claude-haiku-4-5",
+  "sonnet": "aws/claude-sonnet-4-6",
+  "opus": "aws/claude-opus-4-6",
+  "claude-haiku": "aws/claude-haiku-4-5",
+  "claude-sonnet": "aws/claude-sonnet-4-6",
+  "claude-opus": "aws/claude-opus-4-6",
+  "gpt-5": "Azure/gpt-5-2025-08-07",
+  "gpt-4o": "Azure/gpt-4o",
+  "gpt-4.1-mini": "Azure/gpt-4.1-mini",
+  "gemini-pro": "gcp/gemini-2.5-pro",
+  "gemini-flash": "GCP/gemini-2.5-flash"
+}
